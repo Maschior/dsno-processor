@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from get_dsno_info import get_dsno_info
 from unidecode import unidecode
+import unicodedata
 
 log = logging.getLogger(__name__)
 
@@ -162,8 +163,61 @@ def edit_navstar_dsno(dsno_path: str, booking: str, invoice: str, container: str
     r2 = edit_bill_of_lading(dsno_path, invoice)
     r3 = edit_equip_number(dsno_path, container)
     r4 = edit_equip_type_ext1(dsno_path)
-    r5 = normalize_text(dsno_path)
-    return any([r1, r2, r3, r4, r5])
+    return any([r1, r2, r3, r4])
+
+def normalize_file(filepath: str) -> bool:
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            original_lines = f.readlines()
+    except UnicodeDecodeError as ex:
+        log.error("Falha durante a normalização do arquivo. (function: normalize_file, file: dsno_editor.py, line: 149)\n Traceback: " + str(ex))
+        return False
+    
+    normalized_lines = []
+    for line in original_lines:
+        normalized_lines.append(unidecode(line))
+        
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.writelines(normalized_lines)
+    except UnicodeDecodeError as ex:
+        log.error("Falha durante a normalização do arquivo. (function: normalize_file, file: dsno_editor.py, line: 149)\n Traceback: " + str(ex))
+        return False
+    return True
+    
+# def remove_acentos(texto: str) -> str:
+#     return ''.join(
+#         c for c in unicodedata.normalize('NFKD', texto)
+#         if unicodedata.category(c) != 'Mn'
+#     )
+
+# def normalize_file(filepath: str) -> bool:
+#     try:
+#         try:
+#             with open(filepath, 'r', encoding='utf-8') as f:
+#                 original_lines = f.readlines()
+#         except UnicodeDecodeError:
+#             with open(filepath, 'r', encoding='utf-8') as f:
+#                 original_lines = f.readlines()
+
+#         normalized_lines = [remove_acentos(line) for line in original_lines]
+
+#         try:
+#             with open(filepath, 'w', encoding='utf-8') as f:
+#                 f.writelines(normalized_lines)
+#         except UnicodeEncodeError:
+#             with open(filepath, 'w', encoding='utf-8') as f:
+#                 f.writelines(normalized_lines)
+
+#         return True
+
+#     except Exception as ex:
+#         log.error(
+#             "Falha durante a normalização do arquivo. "
+#             "(function: normalize_file)\nTraceback: %s",
+#             ex
+#         )
+#         return False    
 
 def process_single_dsno(invoice: str, dsno_path: str, customer_sheet_path: str) -> bool:
     """
@@ -174,14 +228,11 @@ def process_single_dsno(invoice: str, dsno_path: str, customer_sheet_path: str) 
         invoice=int(invoice),
         customer_sheet_path=customer_sheet_path
     )
-    
     if dsno_info:
         container = dsno_info.get("Container")
         booking = dsno_info.get("Booking/HAWB")
-        
         if not container or container.strip() == "nan":
             container = 'AIR FREIGHT'
-        
         if container and booking and booking.strip() != "nan":
             edit_navstar_dsno(
                 dsno_path=dsno_path,
@@ -189,7 +240,10 @@ def process_single_dsno(invoice: str, dsno_path: str, customer_sheet_path: str) 
                 container=container,
                 booking=booking, 
             )
-            
-            
-            return True
+        else:
+            log.error("Container or Booking information is missing. ")
+            return False
+        if normalize_file(dsno_path):
+            log.info(f"Normalizando o arquivo {dsno_path.split('\\')[-1]}")
+            return True        
     return False

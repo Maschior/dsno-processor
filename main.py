@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
+
 from dsno_editor import process_single_dsno
 from get_invoice_dsno import get_invoice_dsno
 
@@ -47,7 +48,7 @@ def process_dsno(date_range: str, customer_sheet: str, control_sheet: str, dsno_
         log.info(f"---- Processing DSNO: {filename} ----")         
         if process_single_dsno(str(inv), dsno_path, customer_sheet):
             count += 1
-    
+            
     log.info(f"Processed {count} invoices.")
     return count
 
