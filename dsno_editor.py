@@ -3,6 +3,7 @@ import re
 import logging
 from pathlib import Path
 from get_dsno_info import get_dsno_info
+from unidecode import unidecode
 
 log = logging.getLogger(__name__)
 
@@ -138,13 +139,32 @@ def edit_equip_type_ext1(filepath: str) -> bool:
         new_content="TL"
     )
 
+def normalize_text(filepath: str) -> bool:
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            for line in f:
+                line = unidecode(line)
+                f.write(line)
+        return True
+    except UnicodeEncodeError:
+        try:
+            with open(filepath, 'w', encoding='latin-1') as f:
+                for line in f:
+                    line = unidecode(line)
+                    f.write(line)
+            return True
+        except Exception:
+            log.error("Error: Could not normalize text (function: normalize_text, document: dsno_editor.py, line: 142)")
+            return False
+
 def edit_navstar_dsno(dsno_path: str, booking: str, invoice: str, container: str) -> bool:
     r1 = edit_waybill_number(dsno_path, booking)
     r2 = edit_bill_of_lading(dsno_path, invoice)
     r3 = edit_equip_number(dsno_path, container)
     r4 = edit_equip_type_ext1(dsno_path)
-    return any([r1, r2, r3, r4])
-    
+    r5 = normalize_text(dsno_path)
+    return any([r1, r2, r3, r4, r5])
+
 def process_single_dsno(invoice: str, dsno_path: str, customer_sheet_path: str) -> bool:
     """
     Main orchestrator for editing a single DSNO file.
@@ -163,10 +183,13 @@ def process_single_dsno(invoice: str, dsno_path: str, customer_sheet_path: str) 
             container = 'AIR FREIGHT'
         
         if container and booking and booking.strip() != "nan":
-            return edit_navstar_dsno(
+            edit_navstar_dsno(
                 dsno_path=dsno_path,
                 invoice=invoice,
                 container=container,
                 booking=booking, 
             )
+            
+            
+            return True
     return False
