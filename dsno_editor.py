@@ -1,10 +1,7 @@
-import os
-import re
-import logging
+import re, os, logging, configparser
 from pathlib import Path
 from get_dsno_info import get_dsno_info
 from unidecode import unidecode
-import unicodedata
 
 log = logging.getLogger(__name__)
 
@@ -140,32 +137,19 @@ def edit_equip_type_ext1(filepath: str) -> bool:
         new_content="TL"
     )
 
-def normalize_text(filepath: str) -> bool:
-    try:
-        with open(filepath, 'w', encoding='utf-8') as f:
-            for line in f:
-                line = unidecode(line)
-                f.write(line)
-        return True
-    except UnicodeEncodeError:
-        try:
-            with open(filepath, 'w', encoding='latin-1') as f:
-                for line in f:
-                    line = unidecode(line)
-                    f.write(line)
-            return True
-        except Exception:
-            log.error("Error: Could not normalize text (function: normalize_text, document: dsno_editor.py, line: 142)")
-            return False
-
 def edit_navstar_dsno(dsno_path: str, booking: str, invoice: str, container: str) -> bool:
     r1 = edit_waybill_number(dsno_path, booking)
     r2 = edit_bill_of_lading(dsno_path, invoice)
     r3 = edit_equip_number(dsno_path, container)
     r4 = edit_equip_type_ext1(dsno_path)
-    return any([r1, r2, r3, r4])
+    r5 = normalize_file(dsno_path)
+    return any([r1, r2, r3, r4, r5])
 
 def normalize_file(filepath: str) -> bool:
+    if not os.path.exists(filepath):
+        log.error(f"Error: The file '{filepath}' was not found for normalization.")
+        return False
+    
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             original_lines = f.readlines()
@@ -185,39 +169,37 @@ def normalize_file(filepath: str) -> bool:
         return False
     return True
     
-# def remove_acentos(texto: str) -> str:
-#     return ''.join(
-#         c for c in unicodedata.normalize('NFKD', texto)
-#         if unicodedata.category(c) != 'Mn'
-#     )
+def move_files(filepath: str) -> bool:
+    if not os.path.exists(filepath):
+        log.error(f"Error: The file '{filepath}' was not found for moving.")
+        return False
+    
+    config = configparser.ConfigParser()
+    config.read("config.txt", encoding="utf-8")
+    paths = config["PATHS"] if "PATHS" in config else {}
 
-# def normalize_file(filepath: str) -> bool:
-#     try:
-#         try:
-#             with open(filepath, 'r', encoding='utf-8') as f:
-#                 original_lines = f.readlines()
-#         except UnicodeDecodeError:
-#             with open(filepath, 'r', encoding='utf-8') as f:
-#                 original_lines = f.readlines()
+    dsno_directory = str(paths.get("DSNO_DIRECTORY"))
+    dsno = filepath.split("\\")[-1]
 
-#         normalized_lines = [remove_acentos(line) for line in original_lines]
+    processed_files_path = dsno_directory + "\\Processed\\"
+    processed_filepath = processed_files_path + dsno
 
-#         try:
-#             with open(filepath, 'w', encoding='utf-8') as f:
-#                 f.writelines(normalized_lines)
-#         except UnicodeEncodeError:
-#             with open(filepath, 'w', encoding='utf-8') as f:
-#                 f.writelines(normalized_lines)
+    os.makedirs(processed_files_path, exist_ok=True)
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        with open(processed_filepath, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+        
+        if os.path.exists(processed_filepath):
+            os.remove(filepath)
+        
+        log.info(f"DSNO processada movida para: {processed_filepath}")
+    except Exception as ex:
+        log.error("Falha ao mover DSNO processada. (function: move_files, file: dsno_editor.py, line: 187)\n Traceback: " + str(ex))
+        return False
 
-#         return True
-
-#     except Exception as ex:
-#         log.error(
-#             "Falha durante a normalização do arquivo. "
-#             "(function: normalize_file)\nTraceback: %s",
-#             ex
-#         )
-#         return False    
+    return False
 
 def process_single_dsno(invoice: str, dsno_path: str, customer_sheet_path: str) -> bool:
     """
@@ -243,7 +225,8 @@ def process_single_dsno(invoice: str, dsno_path: str, customer_sheet_path: str) 
         else:
             log.error("Container or Booking information is missing. ")
             return False
-        if normalize_file(dsno_path):
-            log.info(f"Normalizando o arquivo {dsno_path.split('\\')[-1]}")
-            return True        
+        if os.path.exists(dsno_path):
+            if normalize_file(dsno_path):
+                log.info(f"Normalizando o arquivo {dsno_path.split('\\')[-1]}")
+                return True        
     return False
