@@ -1,6 +1,15 @@
+# Dependencies
 .venv
 __pycache__
-logs
+*.pyc
+*.pyo
+*.egg-info
+
+# Build artifacts
 build
-main.spec
 dist
+main.spec
+
+# Runtime
+logs
+.env
