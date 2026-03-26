@@ -11,7 +11,7 @@ from .exceptions import DsnoProcessorError
 from .info_reader import get_dsno_info
 from .invoice_reader import get_invoice_dsno_pairs
 from .models import DateRange, DsnoInfo, ProcessingResult
-
+from .status_updater import update_control_sheet_status
 log = logging.getLogger(__name__)
 
 
@@ -126,6 +126,9 @@ def process_dsno(
         else:
             result.success += 1
             move_to_processed(dsno_path, processed_dir)
+
+    # Update CONTROL_SHEET status after processing all DSNO files
+    update_control_sheet_status(control_sheet, processed_dir)
 
     log.info(
         "Processing complete: %d/%d successful, %d errors.",

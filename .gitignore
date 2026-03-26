@@ -13,3 +13,5 @@ main.spec
 # Runtime
 logs
 .env
+
+dsno_download_upload
