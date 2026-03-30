@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from .config import load_config
 from .exceptions import SheetNotFoundError
 from .models import DateRange
 
@@ -16,6 +17,7 @@ log = logging.getLogger(__name__)
 _DATE_COL = "CREATION_DATE"
 _DSNO_COL = "ARGUMENT2"
 _INVOICE_COL = "INVOICE"
+_STATUS_COL = "STATUS"
 
 
 def get_invoice_dsno_pairs(
@@ -40,13 +42,35 @@ def get_invoice_dsno_pairs(
             f"Control ASN Navistar sheet not found at: {path}"
         )
 
+    try:
+        app_config = load_config()
+        valid_statuses = app_config.processor_valid_statuses
+    except Exception as e:
+        log.warning("Failed to load config, defaulting to 'downloaded': %s", e)
+        valid_statuses = ["downloaded"]
+
     df = pd.read_excel(path)
+
+    # Ensure STATUS column exists so we don't get KeyError
+    if _STATUS_COL not in df.columns:
+        df[_STATUS_COL] = pd.NA
 
     df[_DATE_COL] = pd.to_datetime(
         df[_DATE_COL], format="%m/%d/%Y %I:%M:%S %p", errors="coerce"
     )
 
-    mask = (df[_DATE_COL] >= date_range.start) & (df[_DATE_COL] <= date_range.end)
+    date_mask = (df[_DATE_COL] >= date_range.start) & (df[_DATE_COL] <= date_range.end)
+    
+    # Status filter: Only process allowed statuses or empty status
+    status_series = df[_STATUS_COL].astype(str).str.strip().str.lower()
+    status_mask = (
+        df[_STATUS_COL].isna()
+        | (status_series.isin(valid_statuses))
+        | (status_series == "")
+        | (status_series == "nan")
+    )
+    
+    mask = date_mask & status_mask
     df_filtered = df.loc[mask].dropna(subset=[_INVOICE_COL, _DSNO_COL])
 
     invoices = df_filtered[_INVOICE_COL].astype("Int64").tolist()

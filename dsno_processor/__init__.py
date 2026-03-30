@@ -1,5 +1,7 @@
 """DSNO Processor — batch processing of DSNO files against ASN spreadsheets."""
 
+from .ebs_download import DownloadConfig, run_download
+from .ebs_upload import UploadConfig, run_upload
 from .models import DateRange, DsnoInfo, ProcessingResult
 from .processor import process_dsno
 
@@ -8,4 +10,8 @@ __all__ = [
     "DateRange",
     "DsnoInfo",
     "ProcessingResult",
+    "DownloadConfig",
+    "run_download",
+    "UploadConfig",
+    "run_upload",
 ]

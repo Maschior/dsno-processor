@@ -13,6 +13,8 @@ import customtkinter as ctk
 
 from dsno_processor import process_dsno
 from dsno_processor.config import load_config
+from dsno_processor.ebs_download import DownloadConfig, run_download
+from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import ConfigurationError
 
 # ── Appearance ────────────────────────────────────────────────────────
@@ -22,6 +24,24 @@ ctk.set_default_color_theme("blue")
 _FONT_FAMILY = "Segoe UI"
 _DATE_PATTERN = re.compile(r"^\d{2}/\d{2}/\d{4}$")
 
+#  ── Custom functions ────────────────────────────────────────────────────────
+
+def add_placeholder(entry, placeholder_text):
+    entry.insert(0, placeholder_text)
+    entry.configure(text_color="gray")
+
+    def on_focus_in(event):
+        if entry.get() == placeholder_text:
+            entry.delete(0, "end")
+            entry.configure(text_color=("black", "white"))  # light/dark mode
+
+    def on_focus_out(event):
+        if not entry.get():
+            entry.insert(0, placeholder_text)
+            entry.configure(text_color="gray")
+
+    entry.bind("<FocusIn>", on_focus_in)
+    entry.bind("<FocusOut>", on_focus_out)
 
 # ── Logging handler ──────────────────────────────────────────────────
 class TextboxHandler(logging.Handler):
@@ -448,6 +468,32 @@ class DSNOApp(ctk.CTk):
         )
         self.run_btn.pack(pady=14)
 
+        # ── EBS Download / Upload buttons ────────────────────────
+        ebs_frame = ctk.CTkFrame(self, fg_color="transparent")
+        ebs_frame.pack(fill="x", padx=pad, pady=(0, 8))
+
+        ctk.CTkButton(
+            ebs_frame,
+            text="📥  EBS Download",
+            height=36,
+            corner_radius=10,
+            fg_color=("#2e7d32", "#1b5e20"),
+            hover_color=("#388e3c", "#2e7d32"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            command=self._open_download_window,
+        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        ctk.CTkButton(
+            ebs_frame,
+            text="📤  EBS Upload",
+            height=36,
+            corner_radius=10,
+            fg_color=("#e65100", "#bf360c"),
+            hover_color=("#f57c00", "#e65100"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            command=self._open_upload_window,
+        ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+
         # ── Log output ───────────────────────────────────────────
         ctk.CTkLabel(
             self,
@@ -536,6 +582,414 @@ class DSNOApp(ctk.CTk):
             messagebox.showerror("Error", str(exc))
         finally:
             self.run_btn.configure(state="normal")
+
+    # ──────────────────────────────────────────────────────────────
+    # EBS Windows
+    # ──────────────────────────────────────────────────────────────
+
+    def _open_download_window(self) -> None:
+        app_config = None
+        try:
+            app_config = load_config()
+        except Exception:
+            pass
+        DownloadWindow(self, app_config)
+
+    def _open_upload_window(self) -> None:
+        app_config = None
+        try:
+            app_config = load_config()
+        except Exception:
+            pass
+        UploadWindow(self, app_config)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# EBS Download Window
+# ══════════════════════════════════════════════════════════════════════
+
+class _EbsTextboxHandler(logging.Handler):
+    """Route log records to a CTkTextbox in a Toplevel window."""
+
+    def __init__(self, textbox: ctk.CTkTextbox) -> None:
+        super().__init__()
+        self.textbox = textbox
+
+    def emit(self, record: logging.LogRecord) -> None:
+        msg = self.format(record)
+
+        def _append() -> None:
+            self.textbox.configure(state="normal")
+            self.textbox.insert("end", msg + "\n")
+            self.textbox.configure(state="disabled")
+            self.textbox.see("end")
+
+        try:
+            self.textbox.after(0, _append)
+        except Exception:
+            pass
+
+
+class DownloadWindow(ctk.CTkToplevel):
+    """Window for EBS file download automation."""
+
+    def __init__(self, master, app_config=None) -> None:
+        super().__init__(master)
+        self.title("📥 EBS Download")
+        self.geometry("820x700")
+        self.minsize(700, 550)
+        self._app_config = app_config
+        self._handler: _EbsTextboxHandler | None = None
+
+        pad = 14
+
+        # ── Header ────────────────────────────────────────────────
+        header = ctk.CTkFrame(self, corner_radius=12)
+        header.pack(fill="x", padx=pad, pady=(pad, 8))
+        ctk.CTkLabel(
+            header,
+            text="📥  EBS File Download",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=20, weight="bold"),
+        ).pack(pady=(12, 2))
+        ctk.CTkLabel(
+            header,
+            text="Baixe arquivos DSNO do Oracle EBS automaticamente.",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            text_color="gray60",
+        ).pack(pady=(0, 12))
+
+        # ── Form fields ──────────────────────────────────────────
+        form = ctk.CTkScrollableFrame(self, corner_radius=8)
+        form.pack(fill="x", padx=pad, pady=4)
+        form.columnconfigure(1, weight=1)
+
+        row = 0
+
+        def _label(text, r):
+            ctk.CTkLabel(
+                form, text=text, anchor="w", width=140,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            ).grid(row=r, column=0, padx=(0, 8), pady=3, sticky="w")
+
+        def _entry(r, default="", width=None):
+            var = tk.StringVar(value=default)
+            e = ctk.CTkEntry(
+                form, textvariable=var,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            )
+            if width:
+                e.configure(width=width)
+            e.grid(row=r, column=1, sticky="ew", pady=3)
+            return var, e
+
+        # Date range
+        _label("Date Start:", row)
+        self.date_start_var, date_start_entry = _entry(row, "", width=200)
+        add_placeholder(date_start_entry, "DD/MM/YYYY HH:MM:SS")
+        row += 1
+        _label("Date End:", row)
+        self.date_end_var, date_end_entry = _entry(row, "", width=200)
+        add_placeholder(date_end_entry, "DD/MM/YYYY HH:MM:SS")
+        row += 1
+
+        # Status filter
+        _label("Status Filter:", row)
+        self.status_filter_var, status_filter_entry = _entry(row, "")
+        add_placeholder(status_filter_entry, "Processed, Downloaded, <vazio>")
+        row += 1
+
+        # Download Dir
+        _label("Download Dir:", row)
+        self.dir_var, _ = _entry(row, str(app_config.download_dir) if app_config else "")
+        ctk.CTkButton(
+            form, text="Browse", width=70, command=self._browse_dir,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+        ).grid(row=row, column=2, padx=(4, 0), pady=3)
+        row += 1
+
+        # Customer Sheet
+        _label("Customer Sheet:", row)
+        self.sheet_var, _ = _entry(row, str(app_config.control_sheet) if app_config else "")
+        ctk.CTkButton(
+            form, text="Browse", width=70, command=self._browse_sheet,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+        ).grid(row=row, column=2, padx=(4, 0), pady=3)
+        row += 1
+        
+        # EBS URL
+        _label("EBS URL:", row)
+        self.ebs_url_var, _ = _entry(row, app_config.ebs_download_url if app_config else "")
+        row += 1
+
+        # Columns
+        _label("DSNO Column:", row)
+        self.dsno_col_var, _ = _entry(row, app_config.ebs_dsno_col if app_config else "ARGUMENT2")
+        row += 1
+        _label("Date Column:", row)
+        self.date_col_var, _ = _entry(row, app_config.ebs_date_col if app_config else "CREATION_DATE")
+        row += 1
+        _label("Status Column:", row)
+        self.status_col_var, _ = _entry(row, app_config.ebs_status_col if app_config else "STATUS")
+        row += 1
+
+        # Pastas indices
+        indices_str = ",".join(str(x) for x in (app_config.ebs_pastas_indices if app_config else [92, 95, 101]))
+        _label("Pastas Indices:", row)
+        self.pastas_var, _ = _entry(row, indices_str)
+        row += 1
+
+        # ── Buttons ───────────────────────────────────────────────
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=pad, pady=8)
+
+        self.start_btn = ctk.CTkButton(
+            btn_frame,
+            text="▶  Iniciar Download",
+            height=38,
+            corner_radius=10,
+            fg_color=("#2e7d32", "#1b5e20"),
+            hover_color=("#388e3c", "#2e7d32"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            command=self._start_download,
+        )
+        self.start_btn.pack(fill="x")
+
+        # ── Log ───────────────────────────────────────────────────
+        ctk.CTkLabel(
+            self, text="Download Logs:", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).pack(fill="x", padx=pad)
+
+        self.log_box = ctk.CTkTextbox(
+            self, state="disabled", wrap="word",
+            font=ctk.CTkFont(family="Consolas", size=11),
+            corner_radius=8,
+        )
+        self.log_box.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
+
+    # ── Browse helpers ────────────────────────────────────────────
+    def _browse_sheet(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Select Customer Sheet",
+            filetypes=[("Excel Files", "*.xlsx *.xls")],
+        )
+        if path:
+            self.sheet_var.set(path)
+
+    def _browse_dir(self) -> None:
+        folder = filedialog.askdirectory(title="Select Download Directory")
+        if folder:
+            self.dir_var.set(folder)
+
+    # ── Actions ───────────────────────────────────────────────────
+    def _start_download(self) -> None:
+        self.start_btn.configure(state="disabled")
+
+        # Clear log
+        self.log_box.configure(state="normal")
+        self.log_box.delete("1.0", "end")
+        self.log_box.configure(state="disabled")
+
+        # Setup logging handler
+        self._handler = _EbsTextboxHandler(self.log_box)
+        self._handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        logging.getLogger("dsno_processor.ebs_download").addHandler(self._handler)
+
+        # Parse pastas indices
+        try:
+            pastas = [int(x.strip()) for x in self.pastas_var.get().split(",") if x.strip()]
+        except ValueError:
+            pastas = [92, 95, 101]
+
+        config = DownloadConfig(
+            ebs_url=self.ebs_url_var.get(),
+            customer_sheet_path=self.sheet_var.get(),
+            download_dir=self.dir_var.get(),
+            email=self._app_config.ebs_email if self._app_config else "",
+            senha=self._app_config.ebs_password if self._app_config else "",
+            dsno_col=self.dsno_col_var.get(),
+            date_col=self.date_col_var.get(),
+            status_col=self.status_col_var.get(),
+            date_start=self.date_start_var.get(),
+            date_end=self.date_end_var.get(),
+            status_filter=self.status_filter_var.get(),
+            pastas_indices=pastas,
+        )
+
+        thread = threading.Thread(
+            target=self._download_thread, args=(config,), daemon=True,
+        )
+        thread.start()
+
+    def _download_thread(self, config: DownloadConfig) -> None:
+        try:
+            result = run_download(config)
+            total = result["sucesso"] + result["ignorados"] + len(result["falhas"])
+            summary = f"Download concluído: {result['sucesso']}/{total} com sucesso."
+            logging.getLogger("dsno_processor.ebs_download").info(summary)
+            messagebox.showinfo("Download", summary)
+        except Exception as exc:
+            logging.getLogger("dsno_processor.ebs_download").error("Erro: %s", exc)
+            messagebox.showerror("Erro", str(exc))
+        finally:
+            self.start_btn.configure(state="normal")
+            if self._handler:
+                logging.getLogger("dsno_processor.ebs_download").removeHandler(self._handler)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# EBS Upload Window
+# ══════════════════════════════════════════════════════════════════════
+
+class UploadWindow(ctk.CTkToplevel):
+    """Window for EBS file upload automation."""
+
+    def __init__(self, master, app_config=None) -> None:
+        super().__init__(master)
+        self.title("📤 EBS Upload")
+        self.geometry("720x550")
+        self.minsize(600, 450)
+        self._app_config = app_config
+        self._handler: _EbsTextboxHandler | None = None
+
+        pad = 14
+
+        # ── Header ────────────────────────────────────────────────
+        header = ctk.CTkFrame(self, corner_radius=12)
+        header.pack(fill="x", padx=pad, pady=(pad, 8))
+        ctk.CTkLabel(
+            header,
+            text="📤  EBS File Upload",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=20, weight="bold"),
+        ).pack(pady=(12, 2))
+        ctk.CTkLabel(
+            header,
+            text="Envie arquivos DSNO processados ao Oracle EBS.",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            text_color="gray60",
+        ).pack(pady=(0, 12))
+
+        # ── Form fields ──────────────────────────────────────────
+        form = ctk.CTkFrame(self, fg_color="transparent")
+        form.pack(fill="x", padx=pad, pady=4)
+        form.columnconfigure(1, weight=1)
+
+        row = 0
+
+        def _label(text, r):
+            ctk.CTkLabel(
+                form, text=text, anchor="w", width=140,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            ).grid(row=r, column=0, padx=(0, 8), pady=3, sticky="w")
+
+        def _entry(r, default=""):
+            var = tk.StringVar(value=default)
+            ctk.CTkEntry(
+                form, textvariable=var,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            ).grid(row=r, column=1, sticky="ew", pady=3)
+            return var
+
+        # EBS URL
+        _label("EBS URL:", row)
+        self.ebs_url_var = _entry(row, app_config.ebs_upload_url if app_config else "")
+        row += 1
+
+        # Upload Dir
+        _label("Upload Dir:", row)
+        self.dir_var = _entry(row, str(app_config.upload_dir) if app_config else "")
+        ctk.CTkButton(
+            form, text="Browse", width=70, command=self._browse_dir,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+        ).grid(row=row, column=2, padx=(4, 0), pady=3)
+        row += 1
+
+        # Pasta indice
+        _label("Pasta Indice:", row)
+        self.pasta_var = _entry(row, str(app_config.ebs_upload_pasta_indice) if app_config else "92")
+        row += 1
+
+        # ── Buttons ───────────────────────────────────────────────
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=pad, pady=8)
+
+        self.start_btn = ctk.CTkButton(
+            btn_frame,
+            text="▶  Iniciar Upload",
+            height=38,
+            corner_radius=10,
+            fg_color=("#e65100", "#bf360c"),
+            hover_color=("#f57c00", "#e65100"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            command=self._start_upload,
+        )
+        self.start_btn.pack(fill="x")
+
+        # ── Log ───────────────────────────────────────────────────
+        ctk.CTkLabel(
+            self, text="Upload Logs:", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).pack(fill="x", padx=pad)
+
+        self.log_box = ctk.CTkTextbox(
+            self, state="disabled", wrap="word",
+            font=ctk.CTkFont(family="Consolas", size=11),
+            corner_radius=8,
+        )
+        self.log_box.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
+
+    # ── Browse ────────────────────────────────────────────────────
+    def _browse_dir(self) -> None:
+        folder = filedialog.askdirectory(title="Select Upload Directory")
+        if folder:
+            self.dir_var.set(folder)
+
+    # ── Actions ───────────────────────────────────────────────────
+    def _start_upload(self) -> None:
+        self.start_btn.configure(state="disabled")
+
+        # Clear log
+        self.log_box.configure(state="normal")
+        self.log_box.delete("1.0", "end")
+        self.log_box.configure(state="disabled")
+
+        # Setup logging handler
+        self._handler = _EbsTextboxHandler(self.log_box)
+        self._handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        logging.getLogger("dsno_processor.ebs_upload").addHandler(self._handler)
+
+        try:
+            pasta_idx = int(self.pasta_var.get())
+        except ValueError:
+            pasta_idx = 92
+
+        config = UploadConfig(
+            ebs_url=self.ebs_url_var.get(),
+            upload_dir=self.dir_var.get(),
+            email=self._app_config.ebs_email if self._app_config else "",
+            senha=self._app_config.ebs_password if self._app_config else "",
+            pasta_indice=pasta_idx,
+        )
+
+        thread = threading.Thread(
+            target=self._upload_thread, args=(config,), daemon=True,
+        )
+        thread.start()
+
+    def _upload_thread(self, config: UploadConfig) -> None:
+        try:
+            result = run_upload(config)
+            total = result["sucesso"] + result["ignorados"] + len(result["falhas"])
+            summary = f"Upload concluído: {result['sucesso']}/{total} com sucesso."
+            logging.getLogger("dsno_processor.ebs_upload").info(summary)
+            messagebox.showinfo("Upload", summary)
+        except Exception as exc:
+            logging.getLogger("dsno_processor.ebs_upload").error("Erro: %s", exc)
+            messagebox.showerror("Erro", str(exc))
+        finally:
+            self.start_btn.configure(state="normal")
+            if self._handler:
+                logging.getLogger("dsno_processor.ebs_upload").removeHandler(self._handler)
 
 
 def start_gui() -> None:
