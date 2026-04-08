@@ -3,3 +3,4 @@ openpyxl
 customtkinter
 unidecode
 selenium
+tomli_w

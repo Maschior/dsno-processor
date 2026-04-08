@@ -1,0 +1,27 @@
+[paths]
+dsno_directory = "Z:\\Documentação\\ORACLE\\EDI\\Editor de DSNO\\DSNO"
+control_sheet = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\Control ASN Navistar.xlsx"
+customer_sheet = ""
+customer_sheet_pre_path = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR"
+
+[processor]
+valid_statuses = ["Downloaded"]
+
+[ebs]
+download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
+upload_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
+download_dir = "Z:\\Documentação\\ORACLE\\EDI\\Editor de DSNO\\DSNO"
+upload_dir = "Z:\\Documentação\\ORACLE\\EDI\\Editor de DSNO\\DSNO\\processed"
+
+[ebs.columns]
+dsno = "ARGUMENT2"
+date = "CREATION_DATE"
+status = "STATUS"
+
+[ebs.pastas]
+download_indices = [92, 95, 101]
+upload_indice = 92
+
+[credentials]
+email = "ao32v@cummins.com"
+password = "senha"

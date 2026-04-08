@@ -12,7 +12,17 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from dsno_processor import process_dsno
-from dsno_processor.config import AppConfig, load_config, save_config
+from dsno_processor.config import (
+    AppConfig,
+    CredentialsConfig,
+    EbsColumnsConfig,
+    EbsConfig,
+    EbsPastasConfig,
+    PathsConfig,
+    ProcessorConfig,
+    load_config,
+    save_config,
+)
 from dsno_processor.ebs_download import DownloadConfig, run_download
 from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import ConfigurationError
@@ -1024,17 +1034,30 @@ class UploadWindow(ctk.CTkToplevel):
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Settings Window
+# Settings Window — Tabbed interface
 # ══════════════════════════════════════════════════════════════════════
 
 class SettingsWindow(ctk.CTkToplevel):
-    """Window to view and edit the persistent config.txt settings."""
+    """Window to view and edit the persistent config.toml settings.
+
+    Uses a tabbed layout so each config domain (Paths, Processor, EBS,
+    Columns, Pastas, Credentials) gets its own focused view.
+    """
+
+    _TAB_NAMES = [
+        "📂 Caminhos",
+        "⚙ Processador",
+        "🌐 EBS",
+        "📊 Colunas",
+        "📁 Pastas",
+        "🔑 Credenciais",
+    ]
 
     def __init__(self, master, on_save=None) -> None:
         super().__init__(master)
         self.title("⚙  Configurações")
-        self.geometry("780x680")
-        self.minsize(640, 520)
+        self.geometry("800x620")
+        self.minsize(700, 520)
         self._on_save = on_save
 
         # Load current config
@@ -1043,6 +1066,8 @@ class SettingsWindow(ctk.CTkToplevel):
         except Exception:
             self._cfg = None
 
+        self._vars: dict[str, tk.StringVar] = {}
+        self._path_indicators: dict[str, ctk.CTkLabel] = {}
         self._build_ui()
 
     # ──────────────────────────────────────────────────────────────
@@ -1063,96 +1088,30 @@ class SettingsWindow(ctk.CTkToplevel):
         ).pack(pady=(12, 2))
         ctk.CTkLabel(
             header,
-            text="Edite as configurações permanentes salvas em config.txt.",
+            text="Edite as configurações permanentes salvas em config.toml.",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             text_color="gray60",
         ).pack(pady=(0, 12))
 
-        # ── Scrollable form ───────────────────────────────────────
-        form = ctk.CTkScrollableFrame(self, corner_radius=8)
-        form.pack(fill="both", expand=True, padx=pad, pady=4)
-        form.columnconfigure(1, weight=1)
+        # ── Tabview ───────────────────────────────────────────────
+        self._tabview = ctk.CTkTabview(
+            self,
+            corner_radius=10,
+            segmented_button_fg_color=("gray80", "gray20"),
+            segmented_button_selected_color=("#1f6aa5", "#1f6aa5"),
+            segmented_button_unselected_hover_color=("gray70", "gray30"),
+        )
+        self._tabview.pack(fill="both", expand=True, padx=pad, pady=4)
 
-        row = 0
-        self._vars: dict[str, tk.StringVar] = {}
+        for name in self._TAB_NAMES:
+            self._tabview.add(name)
 
-        # ── Section: PATHS ────────────────────────────────────────
-        row = self._section_header(form, "📂  Caminhos (PATHS)", row)
-
-        row = self._add_path_field(
-            form, row, "DSNO Directory:", "dsno_directory",
-            str(cfg.dsno_directory) if cfg else "", mode="dir",
-        )
-        row = self._add_path_field(
-            form, row, "Control Sheet:", "control_sheet",
-            str(cfg.control_sheet) if cfg else "", mode="file",
-            filetypes=[("Excel", "*.xlsx *.xls")],
-        )
-        row = self._add_path_field(
-            form, row, "Customer Sheet:", "customer_sheet",
-            str(cfg.customer_sheet) if cfg else "", mode="file",
-            filetypes=[("Excel", "*.xlsx *.xls")],
-        )
-        row = self._add_path_field(
-            form, row, "Customer Pre-Path:", "customer_sheet_pre_path",
-            str(cfg.customer_sheet_pre_path) if cfg else "", mode="dir",
-        )
-        row = self._add_text_field(
-            form, row, "Valid Statuses:", "processor_valid_statuses",
-            ", ".join(s.capitalize() for s in cfg.processor_valid_statuses) if cfg else "Downloaded",
-        )
-
-        # ── Section: EBS ──────────────────────────────────────────
-        row = self._section_header(form, "🌐  EBS (Oracle)", row)
-
-        row = self._add_text_field(
-            form, row, "Download URL:", "ebs_download_url",
-            cfg.ebs_download_url if cfg else "",
-        )
-        row = self._add_text_field(
-            form, row, "Upload URL:", "ebs_upload_url",
-            cfg.ebs_upload_url if cfg else "",
-        )
-        row = self._add_path_field(
-            form, row, "Download Dir:", "download_dir",
-            str(cfg.download_dir) if cfg else "", mode="dir",
-        )
-        row = self._add_path_field(
-            form, row, "Upload Dir:", "upload_dir",
-            str(cfg.upload_dir) if cfg else "", mode="dir",
-        )
-        row = self._add_text_field(
-            form, row, "DSNO Column:", "ebs_dsno_col",
-            cfg.ebs_dsno_col if cfg else "ARGUMENT2",
-        )
-        row = self._add_text_field(
-            form, row, "Date Column:", "ebs_date_col",
-            cfg.ebs_date_col if cfg else "CREATION_DATE",
-        )
-        row = self._add_text_field(
-            form, row, "Status Column:", "ebs_status_col",
-            cfg.ebs_status_col if cfg else "STATUS",
-        )
-        row = self._add_text_field(
-            form, row, "Pastas Indices:", "ebs_pastas_indices",
-            ",".join(str(i) for i in cfg.ebs_pastas_indices) if cfg else "92,95,101",
-        )
-        row = self._add_text_field(
-            form, row, "Upload Pasta Indice:", "ebs_upload_pasta_indice",
-            str(cfg.ebs_upload_pasta_indice) if cfg else "92",
-        )
-
-        # ── Section: Credentials ──────────────────────────────────
-        row = self._section_header(form, "🔑  Credenciais", row)
-
-        row = self._add_text_field(
-            form, row, "Email:", "ebs_email",
-            cfg.ebs_email if cfg else "",
-        )
-        row = self._add_text_field(
-            form, row, "Password:", "ebs_password",
-            cfg.ebs_password if cfg else "", show="•",
-        )
+        self._build_tab_paths(cfg)
+        self._build_tab_processor(cfg)
+        self._build_tab_ebs(cfg)
+        self._build_tab_columns(cfg)
+        self._build_tab_pastas(cfg)
+        self._build_tab_credentials(cfg)
 
         # ── Buttons ───────────────────────────────────────────────
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -1181,24 +1140,240 @@ class SettingsWindow(ctk.CTkToplevel):
         ).pack(side="left", expand=True, fill="x", padx=(4, 0))
 
     # ──────────────────────────────────────────────────────────────
-    # Field builders
+    # Tab builders
     # ──────────────────────────────────────────────────────────────
 
-    def _section_header(self, parent, text: str, row: int) -> int:
-        """Add a styled section title row."""
-        lbl = ctk.CTkLabel(
-            parent,
-            text=text,
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=14, weight="bold"),
-            anchor="w",
+    def _build_tab_paths(self, cfg) -> None:
+        tab = self._tabview.tab("📂 Caminhos")
+        form = self._make_form(tab)
+
+        self._tab_hint(
+            form, "Diretórios e arquivos utilizados pelo processador DSNO."
         )
-        lbl.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(14, 6))
-        return row + 1
+
+        self._add_path_field(
+            form, 1, "Diretório DSNO:", "dsno_directory",
+            str(cfg.paths.dsno_directory) if cfg else "",
+            mode="dir",
+            hint="Pasta com os arquivos .txt de DSNO.",
+        )
+        self._add_path_field(
+            form, 3, "Control Sheet:", "control_sheet",
+            str(cfg.paths.control_sheet) if cfg else "",
+            mode="file",
+            filetypes=[("Excel", "*.xlsx *.xls")],
+            hint="Planilha Control ASN Navistar.",
+        )
+        self._add_path_field(
+            form, 5, "Customer Sheet:", "customer_sheet",
+            str(cfg.paths.customer_sheet) if cfg else "",
+            mode="file",
+            filetypes=[("Excel", "*.xlsx *.xls")],
+            hint="Planilha do cliente (opcional).",
+        )
+        self._add_path_field(
+            form, 7, "Customer Pre-Path:", "customer_sheet_pre_path",
+            str(cfg.paths.customer_sheet_pre_path) if cfg else "",
+            mode="dir",
+            hint="Pasta padrão para busca da Customer Sheet.",
+        )
+
+    def _build_tab_processor(self, cfg) -> None:
+        tab = self._tabview.tab("⚙ Processador")
+        form = self._make_form(tab)
+
+        self._tab_hint(
+            form,
+            "Configurações que controlam o comportamento do processamento.",
+        )
+
+        self._add_text_field(
+            form, 1, "Status Válidos:", "processor_valid_statuses",
+            ", ".join(
+                s.capitalize()
+                for s in cfg.processor.valid_statuses
+            )
+            if cfg
+            else "Downloaded",
+            hint="Separe múltiplos valores por vírgula (ex: Downloaded, New).",
+        )
+
+    def _build_tab_ebs(self, cfg) -> None:
+        tab = self._tabview.tab("🌐 EBS")
+        form = self._make_form(tab)
+
+        self._tab_hint(
+            form, "URLs e diretórios do Oracle EBS para download e upload."
+        )
+
+        self._add_text_field(
+            form, 1, "Download URL:", "ebs_download_url",
+            cfg.ebs.download_url if cfg else "",
+            hint="URL completa da página de download do EBS.",
+        )
+        self._add_text_field(
+            form, 3, "Upload URL:", "ebs_upload_url",
+            cfg.ebs.upload_url if cfg else "",
+            hint="URL completa da página de upload do EBS.",
+        )
+        self._add_path_field(
+            form, 5, "Download Dir:", "download_dir",
+            str(cfg.ebs.download_dir) if cfg else "",
+            mode="dir",
+            hint="Pasta onde os arquivos baixados serão salvos.",
+        )
+        self._add_path_field(
+            form, 7, "Upload Dir:", "upload_dir",
+            str(cfg.ebs.upload_dir) if cfg else "",
+            mode="dir",
+            hint="Pasta com os arquivos processados para upload.",
+        )
+
+    def _build_tab_columns(self, cfg) -> None:
+        tab = self._tabview.tab("📊 Colunas")
+        form = self._make_form(tab)
+
+        self._tab_hint(
+            form,
+            "Nomes das colunas usadas nas planilhas do EBS.",
+        )
+
+        self._add_text_field(
+            form, 1, "Coluna DSNO:", "ebs_col_dsno",
+            cfg.ebs.columns.dsno if cfg else "ARGUMENT2",
+            hint="Nome da coluna que contém o identificador DSNO.",
+        )
+        self._add_text_field(
+            form, 3, "Coluna Data:", "ebs_col_date",
+            cfg.ebs.columns.date if cfg else "CREATION_DATE",
+            hint="Nome da coluna de data de criação.",
+        )
+        self._add_text_field(
+            form, 5, "Coluna Status:", "ebs_col_status",
+            cfg.ebs.columns.status if cfg else "STATUS",
+            hint="Nome da coluna de status.",
+        )
+
+    def _build_tab_pastas(self, cfg) -> None:
+        tab = self._tabview.tab("📁 Pastas")
+        form = self._make_form(tab)
+
+        self._tab_hint(
+            form,
+            "Índices de pastas usados pelo EBS para download e upload.",
+        )
+
+        indices = (
+            ", ".join(str(x) for x in cfg.ebs.pastas.download_indices)
+            if cfg
+            else "92, 95, 101"
+        )
+        self._add_text_field(
+            form, 1, "Índices Download:", "ebs_pastas_download",
+            indices,
+            hint="Índices separados por vírgula (ex: 92, 95, 101).",
+        )
+        self._add_text_field(
+            form, 3, "Índice Upload:", "ebs_pasta_upload",
+            str(cfg.ebs.pastas.upload_indice) if cfg else "92",
+            hint="Índice da pasta de upload.",
+        )
+
+    def _build_tab_credentials(self, cfg) -> None:
+        tab = self._tabview.tab("🔑 Credenciais")
+        form = self._make_form(tab)
+
+        self._tab_hint(
+            form,
+            "Credenciais usadas para login automático no Microsoft / EBS.",
+        )
+
+        self._add_text_field(
+            form, 1, "Email:", "cred_email",
+            cfg.credentials.email if cfg else "",
+            hint="Endereço de e-mail corporativo.",
+        )
+
+        # Password with toggle
+        row = 3
+        self._hint_label(form, "Senha utilizada no login automático.", row)
+        row += 1
+
+        ctk.CTkLabel(
+            form, text="Senha:", anchor="w", width=150,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
+
+        var = tk.StringVar(
+            value=cfg.credentials.password if cfg else ""
+        )
+        self._password_entry = ctk.CTkEntry(
+            form,
+            textvariable=var,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            show="•",
+        )
+        self._password_entry.grid(row=row, column=1, sticky="ew", pady=3)
+
+        self._password_visible = False
+        self._toggle_btn = ctk.CTkButton(
+            form,
+            text="👁",
+            width=36,
+            height=28,
+            corner_radius=6,
+            fg_color="transparent",
+            hover_color=("gray75", "gray30"),
+            font=ctk.CTkFont(size=14),
+            command=self._toggle_password,
+        )
+        self._toggle_btn.grid(row=row, column=2, padx=(4, 0), pady=3)
+
+        self._vars["cred_password"] = var
+
+    # ──────────────────────────────────────────────────────────────
+    # Widget helpers
+    # ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _make_form(tab) -> ctk.CTkFrame:
+        """Create a scrollable form container inside a tab."""
+        form = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        form.pack(fill="both", expand=True, padx=4, pady=4)
+        form.columnconfigure(1, weight=1)
+        return form
+
+    @staticmethod
+    def _tab_hint(form, text: str) -> None:
+        """Add a descriptive hint at the top of a tab form."""
+        ctk.CTkLabel(
+            form,
+            text=text,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+            text_color="gray55",
+            anchor="w",
+        ).grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 10))
+
+    @staticmethod
+    def _hint_label(form, text: str, row: int) -> None:
+        """Add a small hint label above a field."""
+        ctk.CTkLabel(
+            form,
+            text=text,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=10),
+            text_color="gray50",
+            anchor="w",
+        ).grid(row=row, column=0, columnspan=3, sticky="ew", pady=(8, 0))
 
     def _add_text_field(
         self, parent, row: int, label: str, key: str,
         default: str = "", show: str | None = None,
+        hint: str | None = None,
     ) -> int:
+        if hint:
+            self._hint_label(parent, hint, row)
+            row += 1
+
         ctk.CTkLabel(
             parent, text=label, anchor="w", width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
@@ -1221,7 +1396,12 @@ class SettingsWindow(ctk.CTkToplevel):
     def _add_path_field(
         self, parent, row: int, label: str, key: str,
         default: str = "", mode: str = "dir", filetypes=None,
+        hint: str | None = None,
     ) -> int:
+        if hint:
+            self._hint_label(parent, hint, row)
+            row += 1
+
         ctk.CTkLabel(
             parent, text=label, anchor="w", width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
@@ -1233,9 +1413,23 @@ class SettingsWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=1, sticky="ew", pady=3)
 
+        # Path validity indicator + browse button frame
+        btn_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        btn_frame.grid(row=row, column=2, padx=(4, 0), pady=3)
+
+        # Validity indicator
+        indicator = ctk.CTkLabel(
+            btn_frame, text="", width=20,
+            font=ctk.CTkFont(size=13),
+        )
+        indicator.pack(side="left", padx=(0, 2))
+        self._path_indicators[key] = indicator
+
         def _browse():
             if mode == "dir":
-                result = filedialog.askdirectory(title=f"Selecionar {label.rstrip(':')}")
+                result = filedialog.askdirectory(
+                    title=f"Selecionar {label.rstrip(':')}"
+                )
             else:
                 result = filedialog.askopenfilename(
                     title=f"Selecionar {label.rstrip(':')}",
@@ -1243,14 +1437,47 @@ class SettingsWindow(ctk.CTkToplevel):
                 )
             if result:
                 var.set(result)
+                self._update_indicator(key, result, mode)
 
         ctk.CTkButton(
-            parent, text="Browse", width=70, command=_browse,
+            btn_frame, text="Browse", width=70, command=_browse,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-        ).grid(row=row, column=2, padx=(4, 0), pady=3)
+        ).pack(side="left")
 
         self._vars[key] = var
+
+        # Set initial indicator
+        self._update_indicator(key, default, mode)
+
         return row + 1
+
+    def _update_indicator(self, key: str, value: str, mode: str) -> None:
+        """Update the validity indicator for a path field."""
+        indicator = self._path_indicators.get(key)
+        if not indicator:
+            return
+        if not value or value == ".":
+            indicator.configure(text="")
+            return
+        from pathlib import Path as _P
+        path = _P(value)
+        if mode == "dir":
+            exists = path.is_dir()
+        else:
+            exists = path.is_file()
+        indicator.configure(
+            text="✅" if exists else "❌",
+        )
+
+    def _toggle_password(self) -> None:
+        """Toggle password field visibility."""
+        self._password_visible = not self._password_visible
+        if self._password_visible:
+            self._password_entry.configure(show="")
+            self._toggle_btn.configure(text="🙈")
+        else:
+            self._password_entry.configure(show="•")
+            self._toggle_btn.configure(text="👁")
 
     # ──────────────────────────────────────────────────────────────
     # Save
@@ -1258,17 +1485,19 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _save(self) -> None:
         """Build an AppConfig from the form fields and persist to disk."""
+        from pathlib import Path as _Path
+
         try:
             pastas = [
                 int(x.strip())
-                for x in self._vars["ebs_pastas_indices"].get().split(",")
+                for x in self._vars["ebs_pastas_download"].get().split(",")
                 if x.strip()
             ]
         except ValueError:
             pastas = [92, 95, 101]
 
         try:
-            upload_pasta = int(self._vars["ebs_upload_pasta_indice"].get())
+            upload_pasta = int(self._vars["ebs_pasta_upload"].get())
         except ValueError:
             upload_pasta = 92
 
@@ -1277,25 +1506,35 @@ class SettingsWindow(ctk.CTkToplevel):
             s.strip().lower() for s in valid_raw.split(",") if s.strip()
         ]
 
-        from pathlib import Path
-
         new_config = AppConfig(
-            dsno_directory=Path(self._vars["dsno_directory"].get()),
-            control_sheet=Path(self._vars["control_sheet"].get()),
-            customer_sheet=Path(self._vars["customer_sheet"].get()),
-            customer_sheet_pre_path=Path(self._vars["customer_sheet_pre_path"].get()),
-            ebs_download_url=self._vars["ebs_download_url"].get(),
-            ebs_upload_url=self._vars["ebs_upload_url"].get(),
-            download_dir=Path(self._vars["download_dir"].get()),
-            upload_dir=Path(self._vars["upload_dir"].get()),
-            ebs_dsno_col=self._vars["ebs_dsno_col"].get(),
-            ebs_date_col=self._vars["ebs_date_col"].get(),
-            ebs_status_col=self._vars["ebs_status_col"].get(),
-            ebs_pastas_indices=pastas,
-            ebs_upload_pasta_indice=upload_pasta,
-            ebs_email=self._vars["ebs_email"].get(),
-            ebs_password=self._vars["ebs_password"].get(),
-            processor_valid_statuses=valid_statuses,
+            paths=PathsConfig(
+                dsno_directory=_Path(self._vars["dsno_directory"].get()),
+                control_sheet=_Path(self._vars["control_sheet"].get()),
+                customer_sheet=_Path(self._vars["customer_sheet"].get()),
+                customer_sheet_pre_path=_Path(
+                    self._vars["customer_sheet_pre_path"].get()
+                ),
+            ),
+            processor=ProcessorConfig(valid_statuses=valid_statuses),
+            ebs=EbsConfig(
+                download_url=self._vars["ebs_download_url"].get(),
+                upload_url=self._vars["ebs_upload_url"].get(),
+                download_dir=_Path(self._vars["download_dir"].get()),
+                upload_dir=_Path(self._vars["upload_dir"].get()),
+                columns=EbsColumnsConfig(
+                    dsno=self._vars["ebs_col_dsno"].get(),
+                    date=self._vars["ebs_col_date"].get(),
+                    status=self._vars["ebs_col_status"].get(),
+                ),
+                pastas=EbsPastasConfig(
+                    download_indices=pastas,
+                    upload_indice=upload_pasta,
+                ),
+            ),
+            credentials=CredentialsConfig(
+                email=self._vars["cred_email"].get(),
+                password=self._vars["cred_password"].get(),
+            ),
         )
 
         try:
@@ -1309,7 +1548,10 @@ class SettingsWindow(ctk.CTkToplevel):
                 self._on_save()
             self.destroy()
         except Exception as exc:
-            messagebox.showerror("Erro", f"Erro ao salvar configurações:\n{exc}")
+            messagebox.showerror(
+                "Erro", f"Erro ao salvar configurações:\n{exc}"
+            )
+
 
 
 def start_gui() -> None:

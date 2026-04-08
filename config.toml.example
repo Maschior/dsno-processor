@@ -1,0 +1,27 @@
+[paths]
+dsno_directory = "C:\\path\\to\\dsno\\directory"
+control_sheet = "C:\\path\\to\\Control ASN Navistar.xlsx"
+customer_sheet = ""
+customer_sheet_pre_path = "C:\\path\\to\\customer\\sheets"
+
+[processor]
+valid_statuses = ["Downloaded"]
+
+[ebs]
+download_url = "https://your-ebs-instance.com/OA_HTML/RF.jsp?..."
+upload_url = "https://your-ebs-instance.com/OA_HTML/RF.jsp?..."
+download_dir = "C:\\path\\to\\download\\directory"
+upload_dir = "C:\\path\\to\\upload\\directory"
+
+[ebs.columns]
+dsno = "ARGUMENT2"
+date = "CREATION_DATE"
+status = "STATUS"
+
+[ebs.pastas]
+download_indices = [92, 95, 101]
+upload_indice = 92
+
+[credentials]
+email = "user@company.com"
+password = "your_password"
