@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+import requests
 import openpyxl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -147,15 +148,30 @@ def ler_arquivos_excel(
 
 def iniciar_browser(download_dir: str) -> webdriver.Chrome:
     options = webdriver.ChromeOptions()
+    options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     prefs = {
         "download.default_directory": download_dir,
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
-        "safebrowsing.enabled": True,
+        "safebrowsing.enabled": False,
+        "safebrowsing.disable_download_protection": True,
+        "profile.default_content_setting_values.automatic_downloads": 1,
     }
     options.add_experimental_option("prefs", prefs)
     options.add_experimental_option("detach", True)
-    return webdriver.Chrome(options=options)
+    options.add_argument("--safebrowsing-disable-download-protection")
+    options.add_argument("--disable-web-security")
+    options.add_argument("--disable-features=SafeBrowsingEnhancedProtection")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+
+    driver = webdriver.Chrome(options=options)
+    driver.execute_cdp_cmd("Page.setDownloadBehavior", {
+        "behavior": "allow",
+        "downloadPath": download_dir
+    })
+    
+    return driver
 
 
 def abrir_url(driver: webdriver.Chrome, url: str) -> None:
@@ -247,7 +263,7 @@ def _arquivo_encontrado(driver):
         return False
 
 
-def _tentar_download(driver, wait, nome_arquivo):
+def _tentar_download(driver, wait, nome_arquivo, config: DownloadConfig):
     try:
         campo = wait.until(EC.element_to_be_clickable((By.ID, "FileName")))
         campo.clear()
@@ -255,10 +271,48 @@ def _tentar_download(driver, wait, nome_arquivo):
         time.sleep(5)
         campo.send_keys(Keys.TAB)
         time.sleep(1)
+        
+        # Limpa os logs de performance anteriores para focar apenas nos novos logs
+        driver.get_log("performance")
+        
         botao = wait.until(EC.element_to_be_clickable((By.ID, "Download")))
         botao.click()
-        time.sleep(4)
-        return True
+        
+        # Intercepta e monitora o download nativo via CDP Network
+        logger.info("    🔍 Monitorando o arquivo via CDP Network...")
+        download_guid = None
+        suggested_name = nome_arquivo
+        completed = False
+        start_time = time.time()
+        
+        # Espera de até 120 segundos para o arquivo concluir o download
+        while time.time() - start_time < 120:
+            logs = driver.get_log("performance")
+            for entry in logs:
+                try:
+                    msg = json.loads(entry["message"])["message"]
+                    if msg["method"] == "Page.downloadWillBegin":
+                        download_guid = msg["params"]["guid"]
+                        if "suggestedFilename" in msg["params"]:
+                            suggested_name = msg["params"]["suggestedFilename"]
+                            logger.info("    🔗 Arquivo detectado: %s", suggested_name)
+                    elif msg["method"] == "Page.downloadProgress":
+                        if download_guid and msg["params"].get("guid") == download_guid:
+                            if msg["params"]["state"] == "completed":
+                                completed = True
+                except Exception:
+                    pass
+            
+            if completed:
+                break
+            time.sleep(1)
+            
+        if completed:
+            logger.info("    ✅ Download nativo concluído com sucesso: %s", suggested_name)
+            return True
+        else:
+            logger.warning("    ⚠️  Tempo limite excedido aguardando o download (CDP Timeout).")
+            return False
     except Exception as e:
         logger.warning("    ⚠️  Erro ao tentar download: %s", e)
         return False
@@ -273,26 +327,25 @@ def baixar_arquivo(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
     nome_arquivo: str,
-    url: str,
-    pastas_indices: list[int],
+    config: DownloadConfig,
 ) -> bool:
-    for i, indice in enumerate(pastas_indices, 1):
-        logger.info("    🔍 Tentando pasta %d/%d (índice %d)...", i, len(pastas_indices), indice)
+    for i, indice in enumerate(config.pastas_indices, 1):
+        logger.info("    🔍 Tentando pasta %d/%d (índice %d)...", i, len(config.pastas_indices), indice)
         try:
             _selecionar_pasta(driver, wait, indice)
         except Exception as e:
             logger.warning("    ⚠️  Não foi possível selecionar a pasta %d: %s", i, e)
-            _resetar_formulario(driver, url)
+            _resetar_formulario(driver, config.ebs_url)
             continue
 
         if not _arquivo_encontrado(driver):
             logger.info("    ↩️  Campo de arquivo não disponível nessa pasta.")
-            _resetar_formulario(driver, url)
+            _resetar_formulario(driver, config.ebs_url)
             continue
 
-        if _tentar_download(driver, wait, nome_arquivo):
+        if _tentar_download(driver, wait, nome_arquivo, config):
             return True
-        _resetar_formulario(driver, url)
+        _resetar_formulario(driver, config.ebs_url)
 
     return False
 
@@ -357,7 +410,7 @@ def run_download(config: DownloadConfig) -> dict:
 
     for i, arquivo in enumerate(pendentes, 1):
         logger.info("[%d/%d] %s", i, len(pendentes), arquivo)
-        encontrado = baixar_arquivo(driver, wait, arquivo, config.ebs_url, config.pastas_indices)
+        encontrado = baixar_arquivo(driver, wait, arquivo, config)
         if encontrado:
             registrar_sucesso(historico, arquivo, config.download_dir)
             logger.info("  ✅ Download iniciado!")

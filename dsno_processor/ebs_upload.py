@@ -77,7 +77,8 @@ def listar_arquivos_locais(pasta: str) -> list[str]:
 
     arquivos = [
         f for f in os.listdir(pasta)
-        if os.path.isfile(os.path.join(pasta, f))
+        if os.path.isfile(os.path.join(pasta, f)) 
+        and not (f.startswith("historico_") and f.endswith(".json"))
     ]
 
     if not arquivos:
