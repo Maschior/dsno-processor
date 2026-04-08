@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from dsno_processor import process_dsno
-from dsno_processor.config import load_config
+from dsno_processor.config import AppConfig, load_config, save_config
 from dsno_processor.ebs_download import DownloadConfig, run_download
 from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import ConfigurationError
@@ -402,11 +402,27 @@ class DSNOApp(ctk.CTk):
         header = ctk.CTkFrame(self, corner_radius=12)
         header.pack(fill="x", padx=pad, pady=(pad, 8))
 
+        header_inner = ctk.CTkFrame(header, fg_color="transparent")
+        header_inner.pack(fill="x", padx=12, pady=(10, 0))
+
         ctk.CTkLabel(
-            header,
+            header_inner,
             text="⚙  DSNO Processor",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=22, weight="bold"),
-        ).pack(pady=(14, 2))
+        ).pack(side="left", expand=True)
+
+        ctk.CTkButton(
+            header_inner,
+            text="⚙  Configurações",
+            width=140,
+            height=32,
+            corner_radius=8,
+            fg_color=("gray70", "gray30"),
+            hover_color=("gray60", "gray40"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            command=self._open_settings,
+        ).pack(side="right")
+
         ctk.CTkLabel(
             header,
             text="Process and edit DSNO files according to ASN spreadsheets.",
@@ -602,6 +618,21 @@ class DSNOApp(ctk.CTk):
         except Exception:
             pass
         UploadWindow(self, app_config)
+
+    def _open_settings(self) -> None:
+        SettingsWindow(self, on_save=self._reload_config)
+
+    def _reload_config(self) -> None:
+        """Reload config from disk and refresh main window defaults."""
+        try:
+            app_config = load_config()
+        except ConfigurationError:
+            return
+        self.customer_row.set(str(app_config.customer_sheet))
+        self.control_row.set(str(app_config.control_sheet))
+        self.dsno_row.set(str(app_config.dsno_directory))
+        self._customer_pre_path = str(app_config.customer_sheet_pre_path)
+        logging.info("Configurações recarregadas com sucesso.")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -990,6 +1021,295 @@ class UploadWindow(ctk.CTkToplevel):
             self.start_btn.configure(state="normal")
             if self._handler:
                 logging.getLogger("dsno_processor.ebs_upload").removeHandler(self._handler)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Settings Window
+# ══════════════════════════════════════════════════════════════════════
+
+class SettingsWindow(ctk.CTkToplevel):
+    """Window to view and edit the persistent config.txt settings."""
+
+    def __init__(self, master, on_save=None) -> None:
+        super().__init__(master)
+        self.title("⚙  Configurações")
+        self.geometry("780x680")
+        self.minsize(640, 520)
+        self._on_save = on_save
+
+        # Load current config
+        try:
+            self._cfg = load_config()
+        except Exception:
+            self._cfg = None
+
+        self._build_ui()
+
+    # ──────────────────────────────────────────────────────────────
+    # UI Construction
+    # ──────────────────────────────────────────────────────────────
+
+    def _build_ui(self) -> None:
+        pad = 14
+        cfg = self._cfg
+
+        # ── Header ────────────────────────────────────────────────
+        header = ctk.CTkFrame(self, corner_radius=12)
+        header.pack(fill="x", padx=pad, pady=(pad, 8))
+        ctk.CTkLabel(
+            header,
+            text="⚙  Configurações do Programa",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=20, weight="bold"),
+        ).pack(pady=(12, 2))
+        ctk.CTkLabel(
+            header,
+            text="Edite as configurações permanentes salvas em config.txt.",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            text_color="gray60",
+        ).pack(pady=(0, 12))
+
+        # ── Scrollable form ───────────────────────────────────────
+        form = ctk.CTkScrollableFrame(self, corner_radius=8)
+        form.pack(fill="both", expand=True, padx=pad, pady=4)
+        form.columnconfigure(1, weight=1)
+
+        row = 0
+        self._vars: dict[str, tk.StringVar] = {}
+
+        # ── Section: PATHS ────────────────────────────────────────
+        row = self._section_header(form, "📂  Caminhos (PATHS)", row)
+
+        row = self._add_path_field(
+            form, row, "DSNO Directory:", "dsno_directory",
+            str(cfg.dsno_directory) if cfg else "", mode="dir",
+        )
+        row = self._add_path_field(
+            form, row, "Control Sheet:", "control_sheet",
+            str(cfg.control_sheet) if cfg else "", mode="file",
+            filetypes=[("Excel", "*.xlsx *.xls")],
+        )
+        row = self._add_path_field(
+            form, row, "Customer Sheet:", "customer_sheet",
+            str(cfg.customer_sheet) if cfg else "", mode="file",
+            filetypes=[("Excel", "*.xlsx *.xls")],
+        )
+        row = self._add_path_field(
+            form, row, "Customer Pre-Path:", "customer_sheet_pre_path",
+            str(cfg.customer_sheet_pre_path) if cfg else "", mode="dir",
+        )
+        row = self._add_text_field(
+            form, row, "Valid Statuses:", "processor_valid_statuses",
+            ", ".join(s.capitalize() for s in cfg.processor_valid_statuses) if cfg else "Downloaded",
+        )
+
+        # ── Section: EBS ──────────────────────────────────────────
+        row = self._section_header(form, "🌐  EBS (Oracle)", row)
+
+        row = self._add_text_field(
+            form, row, "Download URL:", "ebs_download_url",
+            cfg.ebs_download_url if cfg else "",
+        )
+        row = self._add_text_field(
+            form, row, "Upload URL:", "ebs_upload_url",
+            cfg.ebs_upload_url if cfg else "",
+        )
+        row = self._add_path_field(
+            form, row, "Download Dir:", "download_dir",
+            str(cfg.download_dir) if cfg else "", mode="dir",
+        )
+        row = self._add_path_field(
+            form, row, "Upload Dir:", "upload_dir",
+            str(cfg.upload_dir) if cfg else "", mode="dir",
+        )
+        row = self._add_text_field(
+            form, row, "DSNO Column:", "ebs_dsno_col",
+            cfg.ebs_dsno_col if cfg else "ARGUMENT2",
+        )
+        row = self._add_text_field(
+            form, row, "Date Column:", "ebs_date_col",
+            cfg.ebs_date_col if cfg else "CREATION_DATE",
+        )
+        row = self._add_text_field(
+            form, row, "Status Column:", "ebs_status_col",
+            cfg.ebs_status_col if cfg else "STATUS",
+        )
+        row = self._add_text_field(
+            form, row, "Pastas Indices:", "ebs_pastas_indices",
+            ",".join(str(i) for i in cfg.ebs_pastas_indices) if cfg else "92,95,101",
+        )
+        row = self._add_text_field(
+            form, row, "Upload Pasta Indice:", "ebs_upload_pasta_indice",
+            str(cfg.ebs_upload_pasta_indice) if cfg else "92",
+        )
+
+        # ── Section: Credentials ──────────────────────────────────
+        row = self._section_header(form, "🔑  Credenciais", row)
+
+        row = self._add_text_field(
+            form, row, "Email:", "ebs_email",
+            cfg.ebs_email if cfg else "",
+        )
+        row = self._add_text_field(
+            form, row, "Password:", "ebs_password",
+            cfg.ebs_password if cfg else "", show="•",
+        )
+
+        # ── Buttons ───────────────────────────────────────────────
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=pad, pady=(8, pad))
+
+        ctk.CTkButton(
+            btn_frame,
+            text="✖  Cancelar",
+            height=38,
+            corner_radius=10,
+            fg_color=("gray70", "gray30"),
+            hover_color=("gray60", "gray40"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
+            command=self.destroy,
+        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        ctk.CTkButton(
+            btn_frame,
+            text="💾  Salvar",
+            height=38,
+            corner_radius=10,
+            fg_color=("#2e7d32", "#1b5e20"),
+            hover_color=("#388e3c", "#2e7d32"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            command=self._save,
+        ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+
+    # ──────────────────────────────────────────────────────────────
+    # Field builders
+    # ──────────────────────────────────────────────────────────────
+
+    def _section_header(self, parent, text: str, row: int) -> int:
+        """Add a styled section title row."""
+        lbl = ctk.CTkLabel(
+            parent,
+            text=text,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=14, weight="bold"),
+            anchor="w",
+        )
+        lbl.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(14, 6))
+        return row + 1
+
+    def _add_text_field(
+        self, parent, row: int, label: str, key: str,
+        default: str = "", show: str | None = None,
+    ) -> int:
+        ctk.CTkLabel(
+            parent, text=label, anchor="w", width=150,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
+
+        var = tk.StringVar(value=default)
+        entry_kwargs = {
+            "textvariable": var,
+            "font": ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        }
+        if show:
+            entry_kwargs["show"] = show
+        ctk.CTkEntry(parent, **entry_kwargs).grid(
+            row=row, column=1, sticky="ew", pady=3, columnspan=2,
+        )
+
+        self._vars[key] = var
+        return row + 1
+
+    def _add_path_field(
+        self, parent, row: int, label: str, key: str,
+        default: str = "", mode: str = "dir", filetypes=None,
+    ) -> int:
+        ctk.CTkLabel(
+            parent, text=label, anchor="w", width=150,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
+
+        var = tk.StringVar(value=default)
+        ctk.CTkEntry(
+            parent, textvariable=var,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).grid(row=row, column=1, sticky="ew", pady=3)
+
+        def _browse():
+            if mode == "dir":
+                result = filedialog.askdirectory(title=f"Selecionar {label.rstrip(':')}")
+            else:
+                result = filedialog.askopenfilename(
+                    title=f"Selecionar {label.rstrip(':')}",
+                    filetypes=filetypes or [],
+                )
+            if result:
+                var.set(result)
+
+        ctk.CTkButton(
+            parent, text="Browse", width=70, command=_browse,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+        ).grid(row=row, column=2, padx=(4, 0), pady=3)
+
+        self._vars[key] = var
+        return row + 1
+
+    # ──────────────────────────────────────────────────────────────
+    # Save
+    # ──────────────────────────────────────────────────────────────
+
+    def _save(self) -> None:
+        """Build an AppConfig from the form fields and persist to disk."""
+        try:
+            pastas = [
+                int(x.strip())
+                for x in self._vars["ebs_pastas_indices"].get().split(",")
+                if x.strip()
+            ]
+        except ValueError:
+            pastas = [92, 95, 101]
+
+        try:
+            upload_pasta = int(self._vars["ebs_upload_pasta_indice"].get())
+        except ValueError:
+            upload_pasta = 92
+
+        valid_raw = self._vars["processor_valid_statuses"].get()
+        valid_statuses = [
+            s.strip().lower() for s in valid_raw.split(",") if s.strip()
+        ]
+
+        from pathlib import Path
+
+        new_config = AppConfig(
+            dsno_directory=Path(self._vars["dsno_directory"].get()),
+            control_sheet=Path(self._vars["control_sheet"].get()),
+            customer_sheet=Path(self._vars["customer_sheet"].get()),
+            customer_sheet_pre_path=Path(self._vars["customer_sheet_pre_path"].get()),
+            ebs_download_url=self._vars["ebs_download_url"].get(),
+            ebs_upload_url=self._vars["ebs_upload_url"].get(),
+            download_dir=Path(self._vars["download_dir"].get()),
+            upload_dir=Path(self._vars["upload_dir"].get()),
+            ebs_dsno_col=self._vars["ebs_dsno_col"].get(),
+            ebs_date_col=self._vars["ebs_date_col"].get(),
+            ebs_status_col=self._vars["ebs_status_col"].get(),
+            ebs_pastas_indices=pastas,
+            ebs_upload_pasta_indice=upload_pasta,
+            ebs_email=self._vars["ebs_email"].get(),
+            ebs_password=self._vars["ebs_password"].get(),
+            processor_valid_statuses=valid_statuses,
+        )
+
+        try:
+            save_config(new_config)
+            messagebox.showinfo(
+                "Configurações",
+                "Configurações salvas com sucesso!\n"
+                "As alterações já estão em vigor.",
+            )
+            if self._on_save:
+                self._on_save()
+            self.destroy()
+        except Exception as exc:
+            messagebox.showerror("Erro", f"Erro ao salvar configurações:\n{exc}")
 
 
 def start_gui() -> None:

@@ -44,6 +44,45 @@ class AppConfig:
         return warnings
 
 
+def save_config(config: AppConfig, path: Path | str | None = None) -> None:
+    """Persist an :class:`AppConfig` instance back to the INI file.
+
+    Args:
+        config: The configuration to save.
+        path: Path to the config file.  Defaults to ``config.txt`` in cwd.
+    """
+    config_path = Path(path) if path else Path(_DEFAULT_CONFIG_FILE)
+
+    parser = configparser.ConfigParser()
+
+    parser["PATHS"] = {
+        "DSNO_DIRECTORY": str(config.dsno_directory),
+        "CONTROL_SHEET": str(config.control_sheet),
+        "CUSTOMER_SHEET": str(config.customer_sheet),
+        "CUSTOMER_SHEET_PRE_PATH": str(config.customer_sheet_pre_path),
+        "PROCESSOR_VALID_STATUSES": ", ".join(
+            s.capitalize() for s in config.processor_valid_statuses
+        ),
+    }
+
+    parser["EBS"] = {
+        "EBS_DOWNLOAD_URL": config.ebs_download_url,
+        "EBS_UPLOAD_URL": config.ebs_upload_url,
+        "DOWNLOAD_DIR": str(config.download_dir),
+        "UPLOAD_DIR": str(config.upload_dir),
+        "DSNO_COL": config.ebs_dsno_col,
+        "DATE_COL": config.ebs_date_col,
+        "STATUS_COL": config.ebs_status_col,
+        "PASTAS_INDICES": ",".join(str(i) for i in config.ebs_pastas_indices),
+        "UPLOAD_PASTA_INDICE": str(config.ebs_upload_pasta_indice),
+        "EMAIL": config.ebs_email,
+        "PASSWORD": config.ebs_password,
+    }
+
+    with open(config_path, "w", encoding="utf-8") as fh:
+        parser.write(fh)
+
+
 def load_config(path: Path | str | None = None) -> AppConfig:
     """Load configuration from an INI-style file.
 
