@@ -206,42 +206,64 @@ def fazer_upload(
 
 # ── Orchestrator ─────────────────────────────────────────────────────
 
-def run_upload(config: UploadConfig) -> dict:
+def run_upload(config: UploadConfig, progress_callback=None) -> dict:
     """Run the full upload flow.
 
     Args:
         config: Upload configuration (includes email/senha for auto-login).
+        progress_callback: Optional ``(event, data_dict)`` callable for
+            real-time progress updates consumed by the GUI dashboard.
 
     Returns:
         A summary dict with ``sucesso``, ``ignorados``, ``falhas`` keys.
     """
+
+    def _cb(event: str, data: dict | None = None) -> None:
+        if progress_callback:
+            progress_callback(event, data or {})
+
     # 1. Load history
+    _cb("phase", {"text": "Carregando histórico..."})
     historico = carregar_historico(config.upload_dir)
     ja_feitos = [k for k, v in historico.items() if v["status"] == "sucesso"]
     if ja_feitos:
         logger.info("📋 Histórico: %d arquivo(s) já enviado(s).", len(ja_feitos))
 
     # 2. List local files
+    _cb("phase", {"text": "Listando arquivos locais..."})
     todos = listar_arquivos_locais(config.upload_dir)
 
     # 3. Filter already uploaded
     pendentes = [a for a in todos if not ja_enviado(historico, a)]
-    ignorados = len(todos) - len(pendentes)
+    ignorados_list = [a for a in todos if ja_enviado(historico, a)]
+    ignorados = len(ignorados_list)
+
+    # Report total (including skipped) to dashboard
+    _cb("total", {"count": len(todos)})
+
+    # Report skipped items individually
+    for a in ignorados_list:
+        _cb("skipped", {"name": a, "detail": "Já enviado"})
+
     if ignorados:
         logger.info("⏭️  %d arquivo(s) ignorado(s) (já enviados).", ignorados)
     logger.info("📤 %d arquivo(s) para enviar.", len(pendentes))
 
     if not pendentes:
         logger.info("🎉 Todos os arquivos já foram enviados!")
+        _cb("finished", {})
         return {"sucesso": 0, "ignorados": ignorados, "falhas": []}
 
     # 4. Start browser
+    _cb("phase", {"text": "Iniciando navegador..."})
     driver = iniciar_browser()
     wait = WebDriverWait(driver, 15)
 
     # 5. Open URL and auto-login
+    _cb("phase", {"text": "Abrindo EBS..."})
     abrir_url(driver, config.ebs_url)
     if config.email and config.senha:
+        _cb("phase", {"text": "Fazendo login automático..."})
         fazer_login_microsoft(driver, wait, config.email, config.senha)
 
     pastas = listar_pastas(driver, wait)
@@ -255,6 +277,7 @@ def run_upload(config: UploadConfig) -> dict:
 
     for i, arquivo in enumerate(pendentes, 1):
         caminho_completo = os.path.join(config.upload_dir, arquivo)
+        _cb("phase", {"text": f"Enviando {arquivo} ({i}/{len(pendentes)})..."})
         logger.info("[%d/%d] %s", i, len(pendentes), arquivo)
 
         sucesso = fazer_upload(driver, wait, caminho_completo, config.pasta_indice)
@@ -262,9 +285,11 @@ def run_upload(config: UploadConfig) -> dict:
             registrar_sucesso(historico, arquivo, config.upload_dir)
             logger.info("  ✅ Upload realizado!")
             sucesso_count += 1
+            _cb("success", {"name": arquivo})
         else:
             logger.warning("  ❌ Falha no upload.")
             falha_lista.append(arquivo)
+            _cb("error", {"name": arquivo, "detail": "Falha no upload"})
 
         # Reset form for the next file
         if i < len(pendentes):
@@ -279,5 +304,6 @@ def run_upload(config: UploadConfig) -> dict:
         for f in falha_lista:
             logger.info("    - %s", f)
 
+    _cb("finished", {})
     driver.quit()
     return {"sucesso": sucesso_count, "ignorados": ignorados, "falhas": falha_lista}

@@ -352,22 +352,31 @@ def baixar_arquivo(
 
 # ── Orchestrator ─────────────────────────────────────────────────────
 
-def run_download(config: DownloadConfig) -> dict:
+def run_download(config: DownloadConfig, progress_callback=None) -> dict:
     """Run the full download flow.
 
     Args:
         config: Download configuration (includes email/senha for auto-login).
+        progress_callback: Optional ``(event, data_dict)`` callable for
+            real-time progress updates consumed by the GUI dashboard.
 
     Returns:
         A summary dict with ``sucesso``, ``ignorados``, ``falhas`` keys.
     """
+
+    def _cb(event: str, data: dict | None = None) -> None:
+        if progress_callback:
+            progress_callback(event, data or {})
+
     # 1. Load history
+    _cb("phase", {"text": "Carregando histórico..."})
     historico = carregar_historico(config.download_dir)
     ja_feitos = [k for k, v in historico.items() if v["status"] == "sucesso"]
     if ja_feitos:
         logger.info("📋 Histórico: %d arquivo(s) já baixado(s).", len(ja_feitos))
 
     # 2. Read spreadsheet
+    _cb("phase", {"text": "Lendo planilha..."})
     todos = ler_arquivos_excel(
         config.customer_sheet_path,
         config.dsno_col,
@@ -380,23 +389,36 @@ def run_download(config: DownloadConfig) -> dict:
 
     # 3. Filter already downloaded
     pendentes = [a for a in todos if not ja_baixado(historico, a)]
-    ignorados = len(todos) - len(pendentes)
+    ignorados_list = [a for a in todos if ja_baixado(historico, a)]
+    ignorados = len(ignorados_list)
+
+    # Report total (including skipped) to dashboard
+    _cb("total", {"count": len(todos)})
+
+    # Report skipped items individually
+    for a in ignorados_list:
+        _cb("skipped", {"name": a, "detail": "Já baixado"})
+
     if ignorados:
         logger.info("⏭️  %d arquivo(s) ignorado(s) (já baixados).", ignorados)
     logger.info("📥 %d arquivo(s) para baixar.", len(pendentes))
 
     if not pendentes:
         logger.info("🎉 Todos os arquivos já foram baixados!")
+        _cb("finished", {})
         return {"sucesso": 0, "ignorados": ignorados, "falhas": []}
 
     # 4. Start browser
+    _cb("phase", {"text": "Iniciando navegador..."})
     os.makedirs(config.download_dir, exist_ok=True)
     driver = iniciar_browser(config.download_dir)
     wait = WebDriverWait(driver, 15)
 
     # 5. Open URL and auto-login
+    _cb("phase", {"text": "Abrindo EBS..."})
     abrir_url(driver, config.ebs_url)
     if config.email and config.senha:
+        _cb("phase", {"text": "Fazendo login automático..."})
         fazer_login_microsoft(driver, wait, config.email, config.senha)
 
     pastas = listar_pastas(driver, wait)
@@ -409,15 +431,18 @@ def run_download(config: DownloadConfig) -> dict:
     falha_lista: list[str] = []
 
     for i, arquivo in enumerate(pendentes, 1):
+        _cb("phase", {"text": f"Baixando {arquivo} ({i}/{len(pendentes)})..."})
         logger.info("[%d/%d] %s", i, len(pendentes), arquivo)
         encontrado = baixar_arquivo(driver, wait, arquivo, config)
         if encontrado:
             registrar_sucesso(historico, arquivo, config.download_dir)
             logger.info("  ✅ Download iniciado!")
             sucesso_count += 1
+            _cb("success", {"name": arquivo})
         else:
             logger.warning("  ❌ Não encontrado em nenhuma das %d pastas.", len(config.pastas_indices))
             falha_lista.append(arquivo)
+            _cb("error", {"name": arquivo, "detail": "Não encontrado nas pastas"})
         time.sleep(1)
 
     # 7. Report
@@ -430,5 +455,6 @@ def run_download(config: DownloadConfig) -> dict:
             logger.info("    - %s", f)
     logger.info("  📁 Downloads: %s", config.download_dir)
 
+    _cb("finished", {})
     driver.quit()
     return {"sucesso": sucesso_count, "ignorados": ignorados, "falhas": falha_lista}

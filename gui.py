@@ -54,8 +54,8 @@ def add_placeholder(entry, placeholder_text):
     entry.bind("<FocusOut>", on_focus_out)
 
 # ── Logging handler ──────────────────────────────────────────────────
-class TextboxHandler(logging.Handler):
-    """Route log records to a CTkTextbox widget."""
+class _DashboardLogHandler(logging.Handler):
+    """Route log records to a CTkTextbox inside a ProgressDashboard."""
 
     def __init__(self, textbox: ctk.CTkTextbox) -> None:
         super().__init__()
@@ -70,7 +70,10 @@ class TextboxHandler(logging.Handler):
             self.textbox.configure(state="disabled")
             self.textbox.see("end")
 
-        self.textbox.after(0, _append)
+        try:
+            self.textbox.after(0, _append)
+        except Exception:
+            pass
 
 
 # ── Calendar popup ───────────────────────────────────────────────────
@@ -362,6 +365,251 @@ class FilePickerRow(ctk.CTkFrame):
         self.var.set(value)
 
 
+# ── Progress Dashboard ───────────────────────────────────────────────
+class ProgressDashboard(ctk.CTkFrame):
+    """Modern visual progress dashboard replacing raw log output.
+
+    Provides phase indicator, progress bar, stat badges,
+    per-item status cards, and a collapsible raw log.
+    """
+
+    _SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _CARD_BG = {
+        "success": ("#d7f5dd", "#17301a"),
+        "error":   ("#fdd", "#301717"),
+        "skipped": ("#fff4d6", "#302a17"),
+    }
+    _CARD_ICON = {
+        "success": "✅", "error": "❌", "skipped": "⏭", "pending": "⏳",
+    }
+    _BADGE_FG = {
+        "success": ("#2e7d32", "#66bb6a"),
+        "error":   ("#c62828", "#ef5350"),
+        "skipped": ("#e65100", "#ffb74d"),
+        "pending": ("#455a64", "#90a4ae"),
+    }
+
+    def __init__(self, master, **kwargs) -> None:
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self._total = 0
+        self._done = 0
+        self._success_count = 0
+        self._error_count = 0
+        self._skipped_count = 0
+        self._running = False
+        self._spinner_idx = 0
+        self._spinner_job = None
+        self._log_visible = False
+        self._build_ui()
+
+    # ── UI construction ──────────────────────────────────────────
+    def _build_ui(self) -> None:
+        # Phase indicator
+        phase_frame = ctk.CTkFrame(self, corner_radius=10)
+        phase_frame.pack(fill="x", pady=(0, 6))
+        phase_inner = ctk.CTkFrame(phase_frame, fg_color="transparent")
+        phase_inner.pack(fill="x", padx=12, pady=8)
+
+        self._spinner_label = ctk.CTkLabel(
+            phase_inner, text="", width=20,
+            font=ctk.CTkFont(size=14),
+        )
+        self._spinner_label.pack(side="left", padx=(0, 8))
+        self._phase_label = ctk.CTkLabel(
+            phase_inner,
+            text="Aguardando início...",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            text_color=("gray40", "gray60"),
+        )
+        self._phase_label.pack(side="left", fill="x", expand=True)
+
+        # Progress bar
+        prog_frame = ctk.CTkFrame(self, fg_color="transparent")
+        prog_frame.pack(fill="x", pady=(0, 6))
+        self._progress_bar = ctk.CTkProgressBar(
+            prog_frame, height=10, corner_radius=5,
+            progress_color=("#1f6aa5", "#1f6aa5"),
+        )
+        self._progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self._progress_bar.set(0)
+        self._progress_label = ctk.CTkLabel(
+            prog_frame, text="0 / 0",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11), width=100,
+        )
+        self._progress_label.pack(side="right")
+
+        # Stats badges
+        stats_frame = ctk.CTkFrame(self, fg_color="transparent")
+        stats_frame.pack(fill="x", pady=(0, 6))
+        self._stat_labels: dict[str, ctk.CTkLabel] = {}
+        for key, icon, text in [
+            ("success", "✅", "Sucesso"), ("error", "❌", "Erros"),
+            ("skipped", "⏭", "Ignorados"), ("pending", "⏳", "Pendentes"),
+        ]:
+            badge = ctk.CTkFrame(stats_frame, corner_radius=8, fg_color=("gray88", "gray20"))
+            badge.pack(side="left", expand=True, fill="x", padx=2)
+            inner = ctk.CTkFrame(badge, fg_color="transparent")
+            inner.pack(padx=8, pady=4)
+            ctk.CTkLabel(inner, text=icon, width=16, font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 3))
+            lbl = ctk.CTkLabel(
+                inner, text="0",
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12, weight="bold"),
+                text_color=self._BADGE_FG[key],
+            )
+            lbl.pack(side="left", padx=(0, 3))
+            ctk.CTkLabel(inner, text=text, font=ctk.CTkFont(family=_FONT_FAMILY, size=10), text_color=("gray50", "gray55")).pack(side="left")
+            self._stat_labels[key] = lbl
+
+        # Item cards
+        self._cards_frame = ctk.CTkScrollableFrame(self, corner_radius=8, fg_color=("gray92", "gray14"))
+        self._cards_frame.pack(fill="both", expand=True, pady=(0, 6))
+        self._empty_label = ctk.CTkLabel(
+            self._cards_frame, text="Nenhum item processado ainda.",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12), text_color=("gray50", "gray50"),
+        )
+        self._empty_label.pack(pady=20)
+
+        # Collapsible log
+        self._log_toggle = ctk.CTkButton(
+            self, text="▶  Mostrar Logs", height=26, corner_radius=6,
+            fg_color=("gray80", "gray25"), hover_color=("gray70", "gray35"),
+            text_color=("gray30", "gray70"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+            command=self._toggle_log, anchor="w",
+        )
+        self._log_toggle.pack(fill="x")
+        self._log_box = ctk.CTkTextbox(
+            self, state="disabled", wrap="word",
+            font=ctk.CTkFont(family="Consolas", size=11),
+            corner_radius=8, height=150,
+        )
+        # Hidden initially — not packed
+
+    # ── Public API (thread-safe via .after) ───────────────────────
+    def reset(self, total: int) -> None:
+        def _do():
+            self._total = total
+            self._done = self._success_count = self._error_count = self._skipped_count = 0
+            self._running = True
+            for w in self._cards_frame.winfo_children():
+                w.destroy()
+            if total == 0:
+                self._empty_label = ctk.CTkLabel(
+                    self._cards_frame, text="Nenhum item encontrado.",
+                    font=ctk.CTkFont(family=_FONT_FAMILY, size=12), text_color=("gray50", "gray50"),
+                )
+                self._empty_label.pack(pady=20)
+            self._progress_bar.set(0)
+            self._progress_label.configure(text=f"0 / {total}")
+            for k in self._stat_labels:
+                self._stat_labels[k].configure(text="0")
+            self._stat_labels["pending"].configure(text=str(total))
+            self._phase_label.configure(text="Iniciando...", text_color=("#1565c0", "#64b5f6"))
+            self._log_box.configure(state="normal")
+            self._log_box.delete("1.0", "end")
+            self._log_box.configure(state="disabled")
+            self._start_spinner()
+        self.after(0, _do)
+
+    def set_phase(self, text: str) -> None:
+        self.after(0, lambda: self._phase_label.configure(text=text, text_color=("#1565c0", "#64b5f6")))
+
+    def mark_success(self, name: str, detail: str = "") -> None:
+        def _do():
+            self._success_count += 1
+            self._done += 1
+            self._add_card(name, "success", detail or "Processado")
+            self._refresh()
+        self.after(0, _do)
+
+    def mark_error(self, name: str, detail: str) -> None:
+        def _do():
+            self._error_count += 1
+            self._done += 1
+            self._add_card(name, "error", detail)
+            self._refresh()
+        self.after(0, _do)
+
+    def mark_skipped(self, name: str, detail: str = "") -> None:
+        def _do():
+            self._skipped_count += 1
+            self._done += 1
+            self._add_card(name, "skipped", detail or "Ignorado")
+            self._refresh()
+        self.after(0, _do)
+
+    def finish(self) -> None:
+        def _do():
+            self._running = False
+            self._stop_spinner()
+            if self._error_count > 0:
+                self._phase_label.configure(text=f"Concluído com {self._error_count} erro(s)", text_color=("#c62828", "#ef5350"))
+                self._spinner_label.configure(text="⚠️")
+            else:
+                self._phase_label.configure(text="Concluído com sucesso!", text_color=("#2e7d32", "#66bb6a"))
+                self._spinner_label.configure(text="✅")
+            self._progress_bar.set(1)
+        self.after(0, _do)
+
+    def get_log_handler(self) -> logging.Handler:
+        handler = _DashboardLogHandler(self._log_box)
+        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        return handler
+
+    # ── Internal ──────────────────────────────────────────────────
+    def _add_card(self, name: str, status: str, detail: str = "") -> None:
+        try:
+            if hasattr(self, "_empty_label") and self._empty_label.winfo_exists():
+                self._empty_label.destroy()
+        except Exception:
+            pass
+        bg = self._CARD_BG.get(status, ("gray90", "gray17"))
+        card = ctk.CTkFrame(self._cards_frame, fg_color=bg, corner_radius=6, height=30)
+        card.pack(fill="x", pady=1)
+        card.pack_propagate(False)
+        ctk.CTkLabel(card, text=self._CARD_ICON.get(status, "⏳"), width=22, font=ctk.CTkFont(size=12)).pack(side="left", padx=(8, 4))
+        ctk.CTkLabel(card, text=name, anchor="w", font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold")).pack(side="left", padx=(0, 8))
+        if detail:
+            ctk.CTkLabel(card, text=detail, anchor="e", font=ctk.CTkFont(family=_FONT_FAMILY, size=10), text_color=("gray45", "gray55")).pack(side="right", padx=(4, 8), fill="x", expand=True)
+        self.after(10, lambda: self._cards_frame._parent_canvas.yview_moveto(1.0))
+
+    def _refresh(self) -> None:
+        if self._total > 0:
+            pct = self._done / self._total
+            self._progress_bar.set(pct)
+            self._progress_label.configure(text=f"{self._done} / {self._total}  ({int(pct * 100)}%)")
+        pending = max(0, self._total - self._done)
+        self._stat_labels["success"].configure(text=str(self._success_count))
+        self._stat_labels["error"].configure(text=str(self._error_count))
+        self._stat_labels["skipped"].configure(text=str(self._skipped_count))
+        self._stat_labels["pending"].configure(text=str(pending))
+
+    def _start_spinner(self) -> None:
+        self._spinner_idx = 0
+        self._tick_spinner()
+
+    def _stop_spinner(self) -> None:
+        if self._spinner_job:
+            self.after_cancel(self._spinner_job)
+            self._spinner_job = None
+
+    def _tick_spinner(self) -> None:
+        if not self._running:
+            return
+        self._spinner_label.configure(text=self._SPINNER[self._spinner_idx % len(self._SPINNER)])
+        self._spinner_idx += 1
+        self._spinner_job = self.after(100, self._tick_spinner)
+
+    def _toggle_log(self) -> None:
+        if self._log_visible:
+            self._log_box.pack_forget()
+            self._log_toggle.configure(text="▶  Mostrar Logs")
+            self._log_visible = False
+        else:
+            self._log_box.pack(fill="x", pady=(4, 0))
+            self._log_toggle.configure(text="▼  Ocultar Logs")
+            self._log_visible = True
+
 # ── Main application ─────────────────────────────────────────────────
 class DSNOApp(ctk.CTk):
     """Main application window."""
@@ -394,8 +642,7 @@ class DSNOApp(ctk.CTk):
     # ──────────────────────────────────────────────────────────────
 
     def _setup_logging(self) -> None:
-        handler = TextboxHandler(self.log_box)
-        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        handler = self.dashboard.get_log_handler()
         root_logger = logging.getLogger()
         root_logger.addHandler(handler)
         root_logger.setLevel(logging.INFO)
@@ -520,22 +767,9 @@ class DSNOApp(ctk.CTk):
             command=self._open_upload_window,
         ).pack(side="left", expand=True, fill="x", padx=(4, 0))
 
-        # ── Log output ───────────────────────────────────────────
-        ctk.CTkLabel(
-            self,
-            text="Process Output Logs:",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
-            anchor="w",
-        ).pack(fill="x", padx=pad)
-
-        self.log_box = ctk.CTkTextbox(
-            self,
-            state="disabled",
-            wrap="word",
-            font=ctk.CTkFont(family="Consolas", size=12),
-            corner_radius=8,
-        )
-        self.log_box.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
+        # ── Progress Dashboard ────────────────────────────────────
+        self.dashboard = ProgressDashboard(self)
+        self.dashboard.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
 
     # ──────────────────────────────────────────────────────────────
     # Browse dialogs
@@ -581,12 +815,25 @@ class DSNOApp(ctk.CTk):
 
     def _start_processing(self) -> None:
         self.run_btn.configure(state="disabled")
-        self.log_box.configure(state="normal")
-        self.log_box.delete("1.0", "end")
-        self.log_box.configure(state="disabled")
-
         thread = threading.Thread(target=self._process_thread, daemon=True)
         thread.start()
+
+    def _make_progress_callback(self):
+        """Create a callback that routes backend events to the dashboard."""
+        def callback(event, data):
+            if event == "phase":
+                self.dashboard.set_phase(data["text"])
+            elif event == "total":
+                self.dashboard.reset(data["count"])
+            elif event == "success":
+                self.dashboard.mark_success(data["name"], data.get("detail", ""))
+            elif event == "error":
+                self.dashboard.mark_error(data["name"], data["detail"])
+            elif event == "skipped":
+                self.dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "finished":
+                self.dashboard.finish()
+        return callback
 
     def _process_thread(self) -> None:
         try:
@@ -596,16 +843,22 @@ class DSNOApp(ctk.CTk):
                 customer_sheet=self.customer_row.get(),
                 control_sheet=self.control_row.get(),
                 dsno_dir=self.dsno_row.get(),
+                progress_callback=self._make_progress_callback(),
             )
 
             summary = (
-                f"Processing completed: {result.success}/{result.total} successful."
+                f"Processamento concluído: {result.success}/{result.total} com sucesso."
             )
             logging.info(summary)
-            messagebox.showinfo("Success", summary)
+            if result.failed > 0:
+                messagebox.showinfo("Concluído", f"{summary}\n{result.failed} erro(s).")
+            else:
+                messagebox.showinfo("Sucesso", summary)
         except Exception as exc:
             logging.error("Error during processing: %s", exc)
-            messagebox.showerror("Error", str(exc))
+            self.dashboard.set_phase(f"Erro: {exc}")
+            self.dashboard.finish()
+            messagebox.showerror("Erro", str(exc))
         finally:
             self.run_btn.configure(state="normal")
 
@@ -649,27 +902,6 @@ class DSNOApp(ctk.CTk):
 # EBS Download Window
 # ══════════════════════════════════════════════════════════════════════
 
-class _EbsTextboxHandler(logging.Handler):
-    """Route log records to a CTkTextbox in a Toplevel window."""
-
-    def __init__(self, textbox: ctk.CTkTextbox) -> None:
-        super().__init__()
-        self.textbox = textbox
-
-    def emit(self, record: logging.LogRecord) -> None:
-        msg = self.format(record)
-
-        def _append() -> None:
-            self.textbox.configure(state="normal")
-            self.textbox.insert("end", msg + "\n")
-            self.textbox.configure(state="disabled")
-            self.textbox.see("end")
-
-        try:
-            self.textbox.after(0, _append)
-        except Exception:
-            pass
-
 
 class DownloadWindow(ctk.CTkToplevel):
     """Window for EBS file download automation."""
@@ -680,7 +912,7 @@ class DownloadWindow(ctk.CTkToplevel):
         self.geometry("820x700")
         self.minsize(700, 550)
         self._app_config = app_config
-        self._handler: _EbsTextboxHandler | None = None
+        self._handler: _DashboardLogHandler | None = None
 
         pad = 14
 
@@ -795,18 +1027,9 @@ class DownloadWindow(ctk.CTkToplevel):
         )
         self.start_btn.pack(fill="x")
 
-        # ── Log ───────────────────────────────────────────────────
-        ctk.CTkLabel(
-            self, text="Download Logs:", anchor="w",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-        ).pack(fill="x", padx=pad)
-
-        self.log_box = ctk.CTkTextbox(
-            self, state="disabled", wrap="word",
-            font=ctk.CTkFont(family="Consolas", size=11),
-            corner_radius=8,
-        )
-        self.log_box.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
+        # ── Progress Dashboard ─────────────────────────────────────
+        self.dashboard = ProgressDashboard(self)
+        self.dashboard.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
 
     # ── Browse helpers ────────────────────────────────────────────
     def _browse_sheet(self) -> None:
@@ -826,14 +1049,8 @@ class DownloadWindow(ctk.CTkToplevel):
     def _start_download(self) -> None:
         self.start_btn.configure(state="disabled")
 
-        # Clear log
-        self.log_box.configure(state="normal")
-        self.log_box.delete("1.0", "end")
-        self.log_box.configure(state="disabled")
-
         # Setup logging handler
-        self._handler = _EbsTextboxHandler(self.log_box)
-        self._handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        self._handler = self.dashboard.get_log_handler()
         logging.getLogger("dsno_processor.ebs_download").addHandler(self._handler)
 
         # Parse pastas indices
@@ -857,20 +1074,36 @@ class DownloadWindow(ctk.CTkToplevel):
             pastas_indices=pastas,
         )
 
+        def _progress_cb(event, data):
+            if event == "phase":
+                self.dashboard.set_phase(data["text"])
+            elif event == "total":
+                self.dashboard.reset(data["count"])
+            elif event == "success":
+                self.dashboard.mark_success(data["name"], data.get("detail", ""))
+            elif event == "error":
+                self.dashboard.mark_error(data["name"], data["detail"])
+            elif event == "skipped":
+                self.dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "finished":
+                self.dashboard.finish()
+
         thread = threading.Thread(
-            target=self._download_thread, args=(config,), daemon=True,
+            target=self._download_thread, args=(config, _progress_cb), daemon=True,
         )
         thread.start()
 
-    def _download_thread(self, config: DownloadConfig) -> None:
+    def _download_thread(self, config: DownloadConfig, progress_cb) -> None:
         try:
-            result = run_download(config)
+            result = run_download(config, progress_callback=progress_cb)
             total = result["sucesso"] + result["ignorados"] + len(result["falhas"])
             summary = f"Download concluído: {result['sucesso']}/{total} com sucesso."
             logging.getLogger("dsno_processor.ebs_download").info(summary)
             messagebox.showinfo("Download", summary)
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_download").error("Erro: %s", exc)
+            self.dashboard.set_phase(f"Erro: {exc}")
+            self.dashboard.finish()
             messagebox.showerror("Erro", str(exc))
         finally:
             self.start_btn.configure(state="normal")
@@ -891,7 +1124,7 @@ class UploadWindow(ctk.CTkToplevel):
         self.geometry("720x550")
         self.minsize(600, 450)
         self._app_config = app_config
-        self._handler: _EbsTextboxHandler | None = None
+        self._handler: _DashboardLogHandler | None = None
 
         pad = 14
 
@@ -966,18 +1199,9 @@ class UploadWindow(ctk.CTkToplevel):
         )
         self.start_btn.pack(fill="x")
 
-        # ── Log ───────────────────────────────────────────────────
-        ctk.CTkLabel(
-            self, text="Upload Logs:", anchor="w",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-        ).pack(fill="x", padx=pad)
-
-        self.log_box = ctk.CTkTextbox(
-            self, state="disabled", wrap="word",
-            font=ctk.CTkFont(family="Consolas", size=11),
-            corner_radius=8,
-        )
-        self.log_box.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
+        # ── Progress Dashboard ─────────────────────────────────────
+        self.dashboard = ProgressDashboard(self)
+        self.dashboard.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
 
     # ── Browse ────────────────────────────────────────────────────
     def _browse_dir(self) -> None:
@@ -989,14 +1213,8 @@ class UploadWindow(ctk.CTkToplevel):
     def _start_upload(self) -> None:
         self.start_btn.configure(state="disabled")
 
-        # Clear log
-        self.log_box.configure(state="normal")
-        self.log_box.delete("1.0", "end")
-        self.log_box.configure(state="disabled")
-
         # Setup logging handler
-        self._handler = _EbsTextboxHandler(self.log_box)
-        self._handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        self._handler = self.dashboard.get_log_handler()
         logging.getLogger("dsno_processor.ebs_upload").addHandler(self._handler)
 
         try:
@@ -1012,20 +1230,36 @@ class UploadWindow(ctk.CTkToplevel):
             pasta_indice=pasta_idx,
         )
 
+        def _progress_cb(event, data):
+            if event == "phase":
+                self.dashboard.set_phase(data["text"])
+            elif event == "total":
+                self.dashboard.reset(data["count"])
+            elif event == "success":
+                self.dashboard.mark_success(data["name"], data.get("detail", ""))
+            elif event == "error":
+                self.dashboard.mark_error(data["name"], data["detail"])
+            elif event == "skipped":
+                self.dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "finished":
+                self.dashboard.finish()
+
         thread = threading.Thread(
-            target=self._upload_thread, args=(config,), daemon=True,
+            target=self._upload_thread, args=(config, _progress_cb), daemon=True,
         )
         thread.start()
 
-    def _upload_thread(self, config: UploadConfig) -> None:
+    def _upload_thread(self, config: UploadConfig, progress_cb) -> None:
         try:
-            result = run_upload(config)
+            result = run_upload(config, progress_callback=progress_cb)
             total = result["sucesso"] + result["ignorados"] + len(result["falhas"])
             summary = f"Upload concluído: {result['sucesso']}/{total} com sucesso."
             logging.getLogger("dsno_processor.ebs_upload").info(summary)
             messagebox.showinfo("Upload", summary)
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_upload").error("Erro: %s", exc)
+            self.dashboard.set_phase(f"Erro: {exc}")
+            self.dashboard.finish()
             messagebox.showerror("Erro", str(exc))
         finally:
             self.start_btn.configure(state="normal")

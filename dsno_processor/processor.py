@@ -79,6 +79,7 @@ def process_dsno(
     customer_sheet: str,
     control_sheet: str,
     dsno_dir: str,
+    progress_callback=None,
 ) -> ProcessingResult:
     """Run a full DSNO processing batch.
 
@@ -90,28 +91,39 @@ def process_dsno(
         customer_sheet: Path to the customer Excel file.
         control_sheet: Path to the internal control sheet.
         dsno_dir: Root directory containing DSNO files.
+        progress_callback: Optional ``(event, data_dict)`` callable for
+            real-time progress updates consumed by the GUI dashboard.
 
     Returns:
         A :class:`ProcessingResult` with counts and error details.
     """
+
+    def _cb(event: str, data: dict | None = None) -> None:
+        if progress_callback:
+            progress_callback(event, data or {})
+
     setup_logger()
     result = ProcessingResult()
 
+    _cb("phase", {"text": "Iniciando processamento..."})
     log.info("Starting processing...")
     log.info("Customer Sheet: %s", customer_sheet)
     log.info("Control Sheet: %s", control_sheet)
     log.info("Date Range: %s", date_range)
     log.info("DSNO Target Directory: %s", dsno_dir)
 
+    _cb("phase", {"text": "Lendo planilha de controle..."})
     parsed_range = DateRange.from_string(date_range)
     pairs = get_invoice_dsno_pairs(parsed_range, control_sheet)
 
     base_dir = Path(dsno_dir)
     processed_dir = base_dir / "Processed"
     result.total = len(pairs)
+    _cb("total", {"count": len(pairs)})
 
     for invoice, dsno_filename in pairs:
         dsno_path = base_dir / dsno_filename
+        _cb("phase", {"text": f"Processando {dsno_path.name}..."})
         log.info("---- Processing DSNO: %s ----", dsno_path.name)
 
         error = _process_single_dsno(
@@ -123,11 +135,14 @@ def process_dsno(
         if error:
             result.errors.append(error)
             log.error(error)
+            _cb("error", {"name": dsno_path.name, "detail": error})
         else:
             result.success += 1
             move_to_processed(dsno_path, processed_dir)
+            _cb("success", {"name": dsno_path.name})
 
     # Update CONTROL_SHEET status after processing all DSNO files
+    _cb("phase", {"text": "Atualizando planilha de controle..."})
     update_control_sheet_status(control_sheet, processed_dir)
 
     log.info(
@@ -136,4 +151,5 @@ def process_dsno(
         result.total,
         result.failed,
     )
+    _cb("finished", {})
     return result
