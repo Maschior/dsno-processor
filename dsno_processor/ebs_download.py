@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+from dsno_processor.exceptions import ConfigurationError
 
 import requests
 import openpyxl
@@ -54,8 +55,12 @@ def _historico_path(download_dir: str) -> Path:
 def carregar_historico(download_dir: str) -> dict:
     path = _historico_path(download_dir)
     if path.exists():
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error("Arquivo de histórico malformado ou vazio: %s. Apague o arquivo ou corrija-o.", e)
+            raise ConfigurationError("Arquivo de histórico malformado ou corrompido. \nApague o arquivo ou corrija-o. \nLocal do arquivo: " + str(path))
     return {}
 
 
@@ -140,7 +145,7 @@ def ler_arquivos_excel(
 
         arquivos.append(str(valor).strip())
 
-    logger.info("✅ %d arquivo(s) encontrado(s) na planilha.", len(arquivos))
+    logger.info(" %d arquivo(s) encontrado(s) na planilha.", len(arquivos))
     return arquivos
 
 
@@ -176,7 +181,7 @@ def iniciar_browser(download_dir: str) -> webdriver.Chrome:
 
 def abrir_url(driver: webdriver.Chrome, url: str) -> None:
     driver.get(url)
-    logger.info("🌐 Navegador aberto.")
+    logger.info(" Navegador aberto.")
 
 
 def fazer_login_microsoft(
@@ -186,7 +191,7 @@ def fazer_login_microsoft(
     senha: str,
 ) -> None:
     """Automate Microsoft login: click 'Entrar', enter email, enter password."""
-    logger.info("🔐 Iniciando login automático Microsoft...")
+    logger.info(" Iniciando login automático Microsoft...")
 
     # Step 1: Click on "Entrar" button
     try:
@@ -211,7 +216,7 @@ def fazer_login_microsoft(
         email_input.send_keys(Keys.RETURN)
         time.sleep(3)
     except Exception as e:
-        logger.warning("   ⚠️ Erro ao inserir email: %s", e)
+        logger.warning("   ⚠ Erro ao inserir email: %s", e)
         raise
 
     # Step 3: Enter password
@@ -226,10 +231,10 @@ def fazer_login_microsoft(
         senha_input.send_keys(Keys.RETURN)
         time.sleep(5)
     except Exception as e:
-        logger.warning("   ⚠️ Erro ao inserir senha: %s", e)
+        logger.warning("   ⚠ Erro ao inserir senha: %s", e)
         raise
 
-    logger.info("✅ Login automático concluído.")
+    logger.info(" Login automático concluído.")
 
 
 def listar_pastas(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
@@ -279,7 +284,7 @@ def _tentar_download(driver, wait, nome_arquivo, config: DownloadConfig):
         botao.click()
         
         # Intercepta e monitora o download nativo via CDP Network
-        logger.info("    🔍 Monitorando o arquivo via CDP Network...")
+        logger.info("     Monitorando o arquivo via CDP Network...")
         download_guid = None
         suggested_name = nome_arquivo
         completed = False
@@ -295,7 +300,7 @@ def _tentar_download(driver, wait, nome_arquivo, config: DownloadConfig):
                         download_guid = msg["params"]["guid"]
                         if "suggestedFilename" in msg["params"]:
                             suggested_name = msg["params"]["suggestedFilename"]
-                            logger.info("    🔗 Arquivo detectado: %s", suggested_name)
+                            logger.info("     Arquivo detectado: %s", suggested_name)
                     elif msg["method"] == "Page.downloadProgress":
                         if download_guid and msg["params"].get("guid") == download_guid:
                             if msg["params"]["state"] == "completed":
@@ -308,13 +313,13 @@ def _tentar_download(driver, wait, nome_arquivo, config: DownloadConfig):
             time.sleep(1)
             
         if completed:
-            logger.info("    ✅ Download nativo concluído com sucesso: %s", suggested_name)
+            logger.info("     Download nativo concluído com sucesso: %s", suggested_name)
             return True
         else:
-            logger.warning("    ⚠️  Tempo limite excedido aguardando o download (CDP Timeout).")
+            logger.warning("    ⚠  Tempo limite excedido aguardando o download (CDP Timeout).")
             return False
     except Exception as e:
-        logger.warning("    ⚠️  Erro ao tentar download: %s", e)
+        logger.warning("    ⚠  Erro ao tentar download: %s", e)
         return False
 
 
@@ -330,16 +335,16 @@ def baixar_arquivo(
     config: DownloadConfig,
 ) -> bool:
     for i, indice in enumerate(config.pastas_indices, 1):
-        logger.info("    🔍 Tentando pasta %d/%d (índice %d)...", i, len(config.pastas_indices), indice)
+        logger.info("     Tentando pasta %d/%d (índice %d)...", i, len(config.pastas_indices), indice)
         try:
             _selecionar_pasta(driver, wait, indice)
         except Exception as e:
-            logger.warning("    ⚠️  Não foi possível selecionar a pasta %d: %s", i, e)
+            logger.warning("    ⚠  Não foi possível selecionar a pasta %d: %s", i, e)
             _resetar_formulario(driver, config.ebs_url)
             continue
 
         if not _arquivo_encontrado(driver):
-            logger.info("    ↩️  Campo de arquivo não disponível nessa pasta.")
+            logger.info("    ↩  Campo de arquivo não disponível nessa pasta.")
             _resetar_formulario(driver, config.ebs_url)
             continue
 
@@ -373,7 +378,7 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
     historico = carregar_historico(config.download_dir)
     ja_feitos = [k for k, v in historico.items() if v["status"] == "sucesso"]
     if ja_feitos:
-        logger.info("📋 Histórico: %d arquivo(s) já baixado(s).", len(ja_feitos))
+        logger.info(" Histórico: %d arquivo(s) já baixado(s).", len(ja_feitos))
 
     # 2. Read spreadsheet
     _cb("phase", {"text": "Lendo planilha..."})
@@ -400,11 +405,11 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
         _cb("skipped", {"name": a, "detail": "Já baixado"})
 
     if ignorados:
-        logger.info("⏭️  %d arquivo(s) ignorado(s) (já baixados).", ignorados)
-    logger.info("📥 %d arquivo(s) para baixar.", len(pendentes))
+        logger.info("  %d arquivo(s) ignorado(s) (já baixados).", ignorados)
+    logger.info(" %d arquivo(s) para baixar.", len(pendentes))
 
     if not pendentes:
-        logger.info("🎉 Todos os arquivos já foram baixados!")
+        logger.info(" Todos os arquivos já foram baixados!")
         _cb("finished", {})
         return {"sucesso": 0, "ignorados": ignorados, "falhas": []}
 
@@ -423,10 +428,10 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
 
     pastas = listar_pastas(driver, wait)
     for p in pastas:
-        logger.info("  📂 %s", p)
+        logger.info("   %s", p)
 
     # 6. Download files
-    logger.info("📥 Iniciando downloads (%d arquivo(s))...", len(pendentes))
+    logger.info(" Iniciando downloads (%d arquivo(s))...", len(pendentes))
     sucesso_count = 0
     falha_lista: list[str] = []
 
@@ -436,24 +441,24 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
         encontrado = baixar_arquivo(driver, wait, arquivo, config)
         if encontrado:
             registrar_sucesso(historico, arquivo, config.download_dir)
-            logger.info("  ✅ Download iniciado!")
+            logger.info("   Download iniciado!")
             sucesso_count += 1
             _cb("success", {"name": arquivo})
         else:
-            logger.warning("  ❌ Não encontrado em nenhuma das %d pastas.", len(config.pastas_indices))
+            logger.warning("   Não encontrado em nenhuma das %d pastas.", len(config.pastas_indices))
             falha_lista.append(arquivo)
             _cb("error", {"name": arquivo, "detail": "Não encontrado nas pastas"})
         time.sleep(1)
 
     # 7. Report
     logger.info("=" * 55)
-    logger.info("  ✅ Sucesso:   %d arquivo(s)", sucesso_count)
-    logger.info("  ⏭️  Ignorados: %d arquivo(s)", ignorados)
-    logger.info("  ❌ Falha:     %d arquivo(s)", len(falha_lista))
+    logger.info("   Sucesso:   %d arquivo(s)", sucesso_count)
+    logger.info("    Ignorados: %d arquivo(s)", ignorados)
+    logger.info("   Falha:     %d arquivo(s)", len(falha_lista))
     if falha_lista:
         for f in falha_lista:
             logger.info("    - %s", f)
-    logger.info("  📁 Downloads: %s", config.download_dir)
+    logger.info("   Downloads: %s", config.download_dir)
 
     _cb("finished", {})
     driver.quit()

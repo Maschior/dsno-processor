@@ -76,98 +76,192 @@ class _DashboardLogHandler(logging.Handler):
             pass
 
 
-# ── Calendar popup ───────────────────────────────────────────────────
+# ── Calendar popup (unified: date-only or date+time) ─────────────────
+_DATETIME_PATTERN = re.compile(r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}$")
+
+
 class _CalendarPopup(ctk.CTkToplevel):
-    """A dark-themed month calendar that floats below a DateInput."""
+    """Month calendar popup. When *show_time* is True an HH:MM:SS spinner
+    section and Apply/Cancel buttons are shown; otherwise clicking a day
+    immediately confirms the selection and closes the popup."""
 
     _DAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     _CELL = 38  # px per column
 
-    def __init__(self, master: "DateInput", year: int, month: int) -> None:
-        super().__init__(master)
+    def __init__(
+        self,
+        master_input: "DateInput",
+        year: int,
+        month: int,
+        *,
+        show_time: bool = False,
+        initial_day: int | None = None,
+        initial_hour: int = 0,
+        initial_minute: int = 0,
+        initial_second: int = 0,
+    ) -> None:
+        super().__init__()
         self.overrideredirect(True)
         self.attributes("-topmost", True)
-        self._master_input = master
+        self._master_input = master_input
         self._year = year
         self._month = month
+        self._show_time = show_time
+        self._selected_day: int | None = initial_day
+        self._hour = initial_hour
+        self._minute = initial_minute
+        self._second = initial_second
 
-        self._frame = ctk.CTkFrame(self, corner_radius=10)
-        self._frame.pack(padx=2, pady=2)
+        outer = ctk.CTkFrame(self, corner_radius=10, border_width=1)
+        outer.pack(fill="both", expand=True, padx=2, pady=2)
 
-        self._build()
-        self._position()
+        # ── Calendar section ──────────────────────────────────────
+        self._cal_frame = ctk.CTkFrame(outer, fg_color="transparent")
+        self._cal_frame.pack(fill="x", padx=8, pady=(8, 4))
 
-        # Close when user clicks anywhere OUTSIDE this popup
-        self._click_id = self._master_input.winfo_toplevel().bind(
-            "<Button-1>", self._on_root_click, add="+"
-        )
+        # ── Time section (only when show_time) ────────────────────
+        if show_time:
+            time_frame = ctk.CTkFrame(outer, fg_color=("gray85", "gray17"), corner_radius=8)
+            time_frame.pack(fill="x", padx=8, pady=(4, 6))
 
-    def destroy(self) -> None:
-        try:
-            self._master_input.winfo_toplevel().unbind(
-                "<Button-1>", self._click_id
+            ctk.CTkLabel(
+                time_frame,
+                text="Horário",
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+                text_color=("gray40", "gray55"),
+            ).pack(pady=(6, 2))
+
+            spinners = ctk.CTkFrame(time_frame, fg_color="transparent")
+            spinners.pack(pady=(0, 6))
+
+            self._h_var = tk.StringVar(value=f"{initial_hour:02d}")
+            self._m_var = tk.StringVar(value=f"{initial_minute:02d}")
+            self._s_var = tk.StringVar(value=f"{initial_second:02d}")
+
+            def _spinner(parent, label, var, delta_fn):
+                col = ctk.CTkFrame(parent, fg_color="transparent")
+                col.pack(side="left", padx=6)
+                ctk.CTkLabel(col, text=label,
+                    font=ctk.CTkFont(family=_FONT_FAMILY, size=10),
+                    text_color=("gray50", "gray60"),
+                ).pack()
+                ctk.CTkButton(col, text="▲", width=34, height=22, corner_radius=4,
+                    fg_color=("gray75", "gray25"), hover_color=("gray65", "gray35"),
+                    font=ctk.CTkFont(size=11), command=lambda: delta_fn(1),
+                ).pack()
+                ctk.CTkEntry(col, textvariable=var, width=38, height=28,
+                    justify="center",
+                    font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+                ).pack(pady=2)
+                ctk.CTkButton(col, text="▼", width=34, height=22, corner_radius=4,
+                    fg_color=("gray75", "gray25"), hover_color=("gray65", "gray35"),
+                    font=ctk.CTkFont(size=11), command=lambda: delta_fn(-1),
+                ).pack()
+
+            def _upd_h(d):
+                self._hour = (self._hour + d) % 24; self._h_var.set(f"{self._hour:02d}")
+            def _upd_m(d):
+                self._minute = (self._minute + d) % 60; self._m_var.set(f"{self._minute:02d}")
+            def _upd_s(d):
+                self._second = (self._second + d) % 60; self._s_var.set(f"{self._second:02d}")
+
+            _spinner(spinners, "HH", self._h_var, _upd_h)
+            ctk.CTkLabel(spinners, text=":", font=ctk.CTkFont(size=18, weight="bold"),
+                text_color=("gray50", "gray60")).pack(side="left", pady=(14, 0))
+            _spinner(spinners, "MM", self._m_var, _upd_m)
+            ctk.CTkLabel(spinners, text=":", font=ctk.CTkFont(size=18, weight="bold"),
+                text_color=("gray50", "gray60")).pack(side="left", pady=(14, 0))
+            _spinner(spinners, "SS", self._s_var, _upd_s)
+
+            # Sync manual typing
+            def _sync(var, lo, hi, attr):
+                try:
+                    setattr(self, attr, max(lo, min(hi, int(var.get()))))
+                except ValueError:
+                    pass
+            self._h_var.trace_add("write", lambda *_: _sync(self._h_var, 0, 23, "_hour"))
+            self._m_var.trace_add("write", lambda *_: _sync(self._m_var, 0, 59, "_minute"))
+            self._s_var.trace_add("write", lambda *_: _sync(self._s_var, 0, 59, "_second"))
+
+            # Apply / Cancel buttons
+            btn_row = ctk.CTkFrame(outer, fg_color="transparent")
+            btn_row.pack(fill="x", padx=8, pady=(0, 8))
+            ctk.CTkButton(btn_row, text="Cancelar", width=90, height=30, corner_radius=6,
+                fg_color=("gray70", "gray30"), hover_color=("gray60", "gray40"),
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+                command=self.destroy,
+            ).pack(side="left", expand=True, padx=(0, 4))
+            ctk.CTkButton(btn_row, text="✔  Aplicar", width=90, height=30, corner_radius=6,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12, weight="bold"),
+                command=self._apply,
+            ).pack(side="left", expand=True, padx=(4, 0))
+
+        self._build_calendar()
+        self.after(10, self._position)
+
+        # Close on outside click (date-only mode)
+        if not show_time:
+            self._click_id = self._master_input.winfo_toplevel().bind(
+                "<Button-1>", self._on_root_click, add="+"
             )
-        except Exception:
-            pass
+
+    # ── Destroy ────────────────────────────────────────────────────
+    def destroy(self) -> None:
+        if not self._show_time:
+            try:
+                self._master_input.winfo_toplevel().unbind(
+                    "<Button-1>", self._click_id
+                )
+            except Exception:
+                pass
         self._master_input._popup = None
         super().destroy()
 
     def _on_root_click(self, event) -> None:
-        """Destroy popup if click lands outside it."""
         try:
             w = event.widget.winfo_containing(event.x_root, event.y_root)
-            # Walk up the widget tree; if it's inside us, keep open
             while w is not None:
-                if w is self or w is self._frame:
+                if w is self:
                     return
                 w = w.master
         except Exception:
             pass
         self.destroy()
 
-    # ── Layout ────────────────────────────────────────────────────
-    def _build(self) -> None:
-        for w in self._frame.winfo_children():
-            w.destroy()
-
+    # ── Calendar grid ──────────────────────────────────────────────
+    def _build_calendar(self) -> None:
         cell = self._CELL
 
+        for w in self._cal_frame.winfo_children():
+            w.destroy()
+
         # Navigation row
-        nav = ctk.CTkFrame(self._frame, fg_color="transparent")
-        nav.pack(fill="x", padx=6, pady=(8, 4))
-
-        ctk.CTkButton(
-            nav, text="◀", width=30, fg_color="transparent",
-            hover_color=("gray75", "gray30"), command=self._prev_month,
+        nav = ctk.CTkFrame(self._cal_frame, fg_color="transparent")
+        nav.pack(fill="x")
+        ctk.CTkButton(nav, text="◀", width=28, height=26, corner_radius=5,
+            fg_color="transparent", hover_color=("gray70", "gray30"),
+            command=self._prev_month, font=ctk.CTkFont(size=12),
         ).pack(side="left")
-
-        ctk.CTkLabel(
-            nav,
+        ctk.CTkLabel(nav,
             text=f"{calendar.month_name[self._month]}  {self._year}",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
         ).pack(side="left", expand=True)
-
-        ctk.CTkButton(
-            nav, text="▶", width=30, fg_color="transparent",
-            hover_color=("gray75", "gray30"), command=self._next_month,
+        ctk.CTkButton(nav, text="▶", width=28, height=26, corner_radius=5,
+            fg_color="transparent", hover_color=("gray70", "gray30"),
+            command=self._next_month, font=ctk.CTkFont(size=12),
         ).pack(side="right")
 
-        # Day grid container (using grid for guaranteed 7 columns)
-        grid = ctk.CTkFrame(self._frame, fg_color="transparent")
-        grid.pack(padx=6, pady=(2, 8))
-
+        # Day grid
+        grid = ctk.CTkFrame(self._cal_frame, fg_color="transparent")
+        grid.pack(fill="x", pady=(4, 0))
         for col in range(7):
             grid.columnconfigure(col, minsize=cell)
-
-        # Day-of-week headers
         for col, d in enumerate(self._DAYS_PT):
-            ctk.CTkLabel(
-                grid, text=d, width=cell,
+            ctk.CTkLabel(grid, text=d, width=cell,
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
                 text_color="gray55",
             ).grid(row=0, column=col, padx=1, pady=(0, 2))
 
-        # Day buttons
         cal_obj = calendar.Calendar(firstweekday=0)
         weeks = cal_obj.monthdayscalendar(self._year, self._month)
         today = datetime.now()
@@ -176,82 +270,124 @@ class _CalendarPopup(ctk.CTkToplevel):
             for col, day in enumerate(week):
                 if day == 0:
                     ctk.CTkLabel(grid, text="", width=cell).grid(
-                        row=row_i, column=col, padx=1, pady=1,
+                        row=row_i, column=col, padx=1, pady=1
                     )
                 else:
+                    selected = day == self._selected_day
                     is_today = (
                         day == today.day
                         and self._month == today.month
                         and self._year == today.year
                     )
+                    bg = ("#1f6aa5", "#1f6aa5") if selected else (
+                        ("gray80", "gray25") if is_today else "transparent"
+                    )
+                    tc = "white" if selected else (
+                        ("#1f6aa5", "#4ba3e3") if is_today else None
+                    )
+                    hover = ("#2979b5", "#2979b5") if selected else (
+                        ("gray70", "gray35") if is_today else ("gray75", "gray30")
+                    )
                     ctk.CTkButton(
-                        grid,
-                        text=str(day),
-                        width=cell,
-                        height=30,
+                        grid, text=str(day), width=cell, height=30,
                         corner_radius=6,
-                        fg_color=("#3a7ebf", "#1f6aa5") if is_today else "transparent",
-                        hover_color=("gray75", "gray30"),
-                        text_color="white" if is_today else None,
-                        font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-                        command=lambda d=day: self._pick(d),
+                        font=ctk.CTkFont(family=_FONT_FAMILY, size=12,
+                                         weight="bold" if is_today else "normal"),
+                        fg_color=bg, hover_color=hover, text_color=tc,
+                        command=lambda d=day: self._pick_day(d),
                     ).grid(row=row_i, column=col, padx=1, pady=1)
 
-    def _position(self) -> None:
-        self.update_idletasks()
-        entry = self._master_input.entry
-        x = entry.winfo_rootx()
-        y = entry.winfo_rooty() + entry.winfo_height() + 4
-        self.geometry(f"+{x}+{y}")
+    # ── Day / month actions ────────────────────────────────────────
+    def _pick_day(self, day: int) -> None:
+        self._selected_day = day
+        if not self._show_time:
+            # No time picker → confirm immediately
+            self._master_input._set_date(day, self._month, self._year)
+            self.destroy()
+        else:
+            self._build_calendar()
 
-    # ── Actions ───────────────────────────────────────────────────
     def _prev_month(self) -> None:
         if self._month == 1:
             self._month, self._year = 12, self._year - 1
         else:
             self._month -= 1
-        self._build()
+        self._build_calendar()
 
     def _next_month(self) -> None:
         if self._month == 12:
             self._month, self._year = 1, self._year + 1
         else:
             self._month += 1
-        self._build()
+        self._build_calendar()
 
-    def _pick(self, day: int) -> None:
-        self._master_input._set_date(day, self._month, self._year)
+    def _apply(self) -> None:
+        """Called only in show_time mode via the Apply button."""
+        day = self._selected_day if self._selected_day is not None else 1
+        self._master_input._set_datetime(
+            day, self._month, self._year,
+            self._hour, self._minute, self._second,
+        )
         self.destroy()
 
+    # ── Positioning ────────────────────────────────────────────────
+    def _position(self) -> None:
+        self.update_idletasks()
+        entry = self._master_input.entry
+        x = entry.winfo_rootx()
+        y = entry.winfo_rooty() + entry.winfo_height() + 4
+        sh, h = self.winfo_screenheight(), self.winfo_height()
 
-# ── Validated date entry ─────────────────────────────────────────────
+        if y + h > sh - 40:
+            y_above = entry.winfo_rooty() - h - 4
+            if y_above >= 10:
+                y = y_above
+
+        y = max(10, min(y, sh - h - 40))
+        self.geometry(f"+{x}+{y}")
+
+
+# ── Unified date / date-time entry ───────────────────────────────────
 class DateInput(ctk.CTkFrame):
-    """A labelled date-entry field with DD/MM/YYYY validation and calendar popup."""
+    """Date entry with calendar popup.
+
+    When *show_time* is False (default): displays DD/MM/YYYY, clicking a day
+    in the calendar confirms immediately.
+    When *show_time* is True: displays DD/MM/YYYY HH:MM:SS, the calendar
+    includes time spinners and Apply/Cancel buttons.
+    """
 
     def __init__(
         self,
         master: ctk.CTkBaseClass,
-        label: str = "Date:",
+        label: str = "",
+        show_time: bool = False,
+        prefill_today: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
         self._popup: _CalendarPopup | None = None
+        self._show_time = show_time
+        self._fmt = "%d/%m/%Y %H:%M:%S" if show_time else "%d/%m/%Y"
+        self._pattern = _DATETIME_PATTERN if show_time else _DATE_PATTERN
 
-        ctk.CTkLabel(
-            self,
-            text=label,
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
-        ).pack(side="left", padx=(0, 6))
+        if label:
+            ctk.CTkLabel(
+                self,
+                text=label,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
+            ).pack(side="left", padx=(0, 6))
 
+        placeholder = "DD/MM/YYYY HH:MM:SS" if show_time else "DD/MM/YYYY"
         self.entry = ctk.CTkEntry(
             self,
-            width=120,
-            placeholder_text="DD/MM/YYYY",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
+            width=190 if show_time else 120,
+            placeholder_text=placeholder,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13 if not show_time else 12),
         )
         self.entry.pack(side="left")
 
-        cal_btn = ctk.CTkButton(
+        ctk.CTkButton(
             self,
             text="📅",
             width=32,
@@ -259,67 +395,98 @@ class DateInput(ctk.CTkFrame):
             corner_radius=6,
             fg_color="transparent",
             hover_color=("gray75", "gray30"),
-            command=self._toggle_calendar,
+            command=self._toggle_popup,
             font=ctk.CTkFont(size=15),
-        )
-        cal_btn.pack(side="left", padx=(4, 0))
+        ).pack(side="left", padx=(4, 0))
 
-        # Pre-fill with today
-        today = datetime.now().strftime("%d/%m/%Y")
-        self.entry.insert(0, today)
+        if prefill_today:
+            self.entry.insert(0, datetime.now().strftime(self._fmt))
 
-        # Open calendar on entry click too
-        self.entry.bind("<Button-1>", lambda _: self.after(50, self._toggle_calendar))
-
-        # Validate on focus-out
+        self.entry.bind("<Button-1>", lambda _: self.after(50, self._toggle_popup))
         self.entry.bind("<FocusOut>", self._validate)
 
     # ── Public API ────────────────────────────────────────────────
     def get(self) -> str:
         return self.entry.get().strip()
 
-    # ── Internal ──────────────────────────────────────────────────
+    def set(self, value: str) -> None:
+        self.entry.delete(0, "end")
+        self.entry.insert(0, value)
+
+    # ── Callbacks from popup ──────────────────────────────────────
     def _set_date(self, day: int, month: int, year: int) -> None:
+        """Called by the popup in date-only mode."""
         self.entry.delete(0, "end")
         self.entry.insert(0, f"{day:02d}/{month:02d}/{year}")
         self.entry.configure(
             border_color=ctk.ThemeManager.theme["CTkEntry"]["border_color"]
         )
 
-    def _toggle_calendar(self) -> None:
-        # Close existing popup
+    def _set_datetime(self, day, month, year, hour, minute, second) -> None:
+        """Called by the popup in date+time mode."""
+        self.entry.delete(0, "end")
+        self.entry.insert(
+            0, f"{day:02d}/{month:02d}/{year} {hour:02d}:{minute:02d}:{second:02d}"
+        )
+        self.entry.configure(
+            border_color=ctk.ThemeManager.theme["CTkEntry"]["border_color"]
+        )
+
+    # ── Toggle ────────────────────────────────────────────────────
+    def _toggle_popup(self) -> None:
         if self._popup is not None and self._popup.winfo_exists():
             self._popup.destroy()
             self._popup = None
             return
 
-        # Determine starting month from current value
         now = datetime.now()
+        day: int | None = None
+        h, m, s = 0, 0, 0
+
         value = self.get()
-        if _DATE_PATTERN.match(value):
+        if self._pattern.match(value):
             try:
-                dt = datetime.strptime(value, "%d/%m/%Y")
-                now = dt
+                dt = datetime.strptime(value, self._fmt)
+                now, day = dt, dt.day
+                if self._show_time:
+                    h, m, s = dt.hour, dt.minute, dt.second
             except ValueError:
                 pass
 
-        self._popup = _CalendarPopup(self, now.year, now.month)
+        self._popup = _CalendarPopup(
+            self, now.year, now.month,
+            show_time=self._show_time,
+            initial_day=day,
+            initial_hour=h,
+            initial_minute=m,
+            initial_second=s,
+        )
 
+    # ── Validation ────────────────────────────────────────────────
     def _validate(self, _event=None) -> None:
         value = self.get()
         if not value:
             return
-        if not _DATE_PATTERN.match(value):
-            self.entry.configure(border_color="#e74c3c")
-            return
-        try:
-            datetime.strptime(value, "%d/%m/%Y")
-            self.entry.configure(border_color=ctk.ThemeManager.theme["CTkEntry"]["border_color"])
-        except ValueError:
-            self.entry.configure(border_color="#e74c3c")
+        theme_color = ctk.ThemeManager.theme["CTkEntry"]["border_color"]
+        if self._pattern.match(value):
+            try:
+                datetime.strptime(value, self._fmt)
+                self.entry.configure(border_color=theme_color)
+                return
+            except ValueError:
+                pass
+        self.entry.configure(border_color="#e74c3c")
 
 
-# ── File picker row ──────────────────────────────────────────────────
+# Alias for convenience — behaves exactly like DateInput(show_time=True)
+class DateTimeInput(DateInput):
+    """DateInput with time picker enabled by default."""
+
+    def __init__(self, master: ctk.CTkBaseClass, **kwargs) -> None:
+        kwargs.setdefault("show_time", True)
+        super().__init__(master, **kwargs)
+
+
 class FilePickerRow(ctk.CTkFrame):
     """A row with label, entry, and browse button."""
 
@@ -572,7 +739,6 @@ class ProgressDashboard(ctk.CTkFrame):
         if detail:
             ctk.CTkLabel(card, text=detail, anchor="e", font=ctk.CTkFont(family=_FONT_FAMILY, size=10), text_color=("gray45", "gray55")).pack(side="right", padx=(4, 8), fill="x", expand=True)
         self.after(10, lambda: self._cards_frame._parent_canvas.yview_moveto(1.0))
-
     def _refresh(self) -> None:
         if self._total > 0:
             pct = self._done / self._total
@@ -614,24 +780,30 @@ class ProgressDashboard(ctk.CTkFrame):
 class DSNOApp(ctk.CTk):
     """Main application window."""
 
+    _TAB_PROC     = "⚙  Processador"
+    _TAB_DOWNLOAD = "📥  EBS Download"
+    _TAB_UPLOAD   = "📤  EBS Upload"
+
     def __init__(self) -> None:
         super().__init__()
         self.title("DSNO Processor")
-        self.geometry("780x600")
-        self.minsize(640, 500)
+        self.geometry("900x720")
+        self.minsize(760, 580)
 
         # ── Load config ──────────────────────────────────────────
         try:
-            app_config = load_config()
+            self._app_config = load_config()
         except ConfigurationError:
-            app_config = None
+            self._app_config = None
 
-        default_customer = str(app_config.customer_sheet) if app_config else ""
-        default_control = str(app_config.control_sheet) if app_config else ""
-        default_dsno_dir = str(app_config.dsno_directory) if app_config else ""
-        self._customer_pre_path = (
-            str(app_config.customer_sheet_pre_path) if app_config else ""
-        )
+        cfg = self._app_config
+        default_customer = str(cfg.customer_sheet) if cfg else ""
+        default_control  = str(cfg.control_sheet)  if cfg else ""
+        default_dsno_dir = str(cfg.dsno_directory)  if cfg else ""
+        self._customer_pre_path = str(cfg.customer_sheet_pre_path) if cfg else ""
+
+        self._dl_handler: _DashboardLogHandler | None = None
+        self._ul_handler: _DashboardLogHandler | None = None
 
         # ── Build UI ─────────────────────────────────────────────
         self._create_widgets(default_customer, default_control, default_dsno_dir)
@@ -657,7 +829,7 @@ class DSNOApp(ctk.CTk):
 
         # ── Header ───────────────────────────────────────────────
         header = ctk.CTkFrame(self, corner_radius=12)
-        header.pack(fill="x", padx=pad, pady=(pad, 8))
+        header.pack(fill="x", padx=pad, pady=(pad, 6))
 
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
         header_inner.pack(fill="x", padx=12, pady=(10, 0))
@@ -687,10 +859,38 @@ class DSNOApp(ctk.CTk):
             text_color="gray60",
         ).pack(pady=(0, 14))
 
-        # ── Date range ───────────────────────────────────────────
-        date_frame = ctk.CTkFrame(self, fg_color="transparent")
-        date_frame.pack(fill="x", padx=pad, pady=4)
+        # ── Tabview ──────────────────────────────────────────────
+        self._tabview = ctk.CTkTabview(
+            self,
+            corner_radius=10,
+            segmented_button_fg_color=("gray80", "gray20"),
+            segmented_button_selected_color=("#1f6aa5", "#1f6aa5"),
+            segmented_button_unselected_hover_color=("gray70", "gray30"),
+        )
+        self._tabview.pack(fill="both", expand=True, padx=pad, pady=(0, pad))
+        self._tabview.add(self._TAB_PROC)
+        self._tabview.add(self._TAB_DOWNLOAD)
+        self._tabview.add(self._TAB_UPLOAD)
 
+        self._build_tab_processor(default_customer, default_control, default_dsno_dir)
+        self._build_tab_download()
+        self._build_tab_upload()
+
+    # ──────────────────────────────────────────────────────────────
+    # Tab: Processador
+    # ──────────────────────────────────────────────────────────────
+
+    def _build_tab_processor(
+        self,
+        default_customer: str,
+        default_control: str,
+        default_dsno_dir: str,
+    ) -> None:
+        tab = self._tabview.tab(self._TAB_PROC)
+
+        # Date range
+        date_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        date_frame.pack(fill="x", pady=(8, 4))
         ctk.CTkLabel(
             date_frame,
             text="Date Range:",
@@ -698,81 +898,279 @@ class DSNOApp(ctk.CTk):
             width=130,
             anchor="w",
         ).pack(side="left")
-
-        self.start_date = DateInput(date_frame, label="Start:")
+        self.start_date = DateInput(date_frame, label="Start:", prefill_today=True)
         self.start_date.pack(side="left", padx=(0, 20))
-
-        self.end_date = DateInput(date_frame, label="End:")
+        self.end_date = DateInput(date_frame, label="End:", prefill_today=True)
         self.end_date.pack(side="left")
 
-        # ── File pickers ─────────────────────────────────────────
+        # File pickers
         self.customer_row = FilePickerRow(
-            self,
+            tab,
             label="Customer Sheet:",
             default=default_customer,
             browse_command=self._browse_customer,
         )
-        self.customer_row.pack(fill="x", padx=pad, pady=4)
+        self.customer_row.pack(fill="x", pady=4)
 
         self.control_row = FilePickerRow(
-            self,
+            tab,
             label="Control Sheet:",
             default=default_control,
             browse_command=self._browse_control,
         )
-        self.control_row.pack(fill="x", padx=pad, pady=4)
+        self.control_row.pack(fill="x", pady=4)
 
         self.dsno_row = FilePickerRow(
-            self,
+            tab,
             label="DSNO Directory:",
             default=default_dsno_dir,
             browse_command=self._browse_dsno_dir,
         )
-        self.dsno_row.pack(fill="x", padx=pad, pady=4)
+        self.dsno_row.pack(fill="x", pady=4)
 
-        # ── Run button ───────────────────────────────────────────
+        # Run button
         self.run_btn = ctk.CTkButton(
-            self,
+            tab,
             text="▶  Start Processing",
             height=40,
             corner_radius=10,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=14, weight="bold"),
             command=self._start_processing,
         )
-        self.run_btn.pack(pady=14)
+        self.run_btn.pack(pady=12, fill="x")
 
-        # ── EBS Download / Upload buttons ────────────────────────
-        ebs_frame = ctk.CTkFrame(self, fg_color="transparent")
-        ebs_frame.pack(fill="x", padx=pad, pady=(0, 8))
+        # Progress dashboard
+        self.dashboard = ProgressDashboard(tab)
+        self.dashboard.pack(fill="both", expand=True, pady=(0, 4))
 
-        ctk.CTkButton(
-            ebs_frame,
-            text="📥  EBS Download",
-            height=36,
+    # ──────────────────────────────────────────────────────────────
+    # Tab: EBS Download
+    # ──────────────────────────────────────────────────────────────
+
+    _DL_TAB_CONFIG   = "⚙  Configuração"
+    _DL_TAB_PROGRESS = "📊  Andamento"
+
+    def _build_tab_download(self) -> None:
+        cfg = self._app_config
+        outer = self._tabview.tab(self._TAB_DOWNLOAD)
+
+        inner_tab = ctk.CTkTabview(
+            outer,
             corner_radius=10,
+            segmented_button_fg_color=("gray80", "gray20"),
+            segmented_button_selected_color=("#2e7d32", "#1b5e20"),
+            segmented_button_unselected_hover_color=("gray70", "gray30"),
+        )
+        inner_tab.pack(fill="both", expand=True)
+        inner_tab.add(self._DL_TAB_CONFIG)
+        inner_tab.add(self._DL_TAB_PROGRESS)
+        self._dl_tabview = inner_tab
+
+        # ── Configuração sub-tab ──────────────────────────────────
+        tab = inner_tab.tab(self._DL_TAB_CONFIG)
+
+        form = ctk.CTkScrollableFrame(tab, corner_radius=8, fg_color="transparent")
+        form.pack(fill="both", expand=True, pady=(4, 8))
+        form.columnconfigure(1, weight=1)
+
+        row = 0
+
+        def _lbl(text, r):
+            ctk.CTkLabel(
+                form, text=text, anchor="w", width=150,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            ).grid(row=r, column=0, padx=(6, 8), pady=4, sticky="w")
+
+        def _ent(r, default="", width=None):
+            var = tk.StringVar(value=default)
+            e = ctk.CTkEntry(form, textvariable=var,
+                             font=ctk.CTkFont(family=_FONT_FAMILY, size=12))
+            if width:
+                e.configure(width=width)
+            e.grid(row=r, column=1, sticky="ew", pady=4, padx=(0, 6))
+            return var, e
+
+        # Período
+        ctk.CTkLabel(form, text="Período", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
+        row += 1
+        _lbl("Data Início:", row)
+        self.dl_date_start = DateTimeInput(form)
+        self.dl_date_start.grid(row=row, column=1, columnspan=2, sticky="w", pady=4, padx=(0, 6))
+        row += 1
+        _lbl("Data Fim:", row)
+        self.dl_date_end = DateTimeInput(form)
+        self.dl_date_end.grid(row=row, column=1, columnspan=2, sticky="w", pady=4, padx=(0, 6))
+        row += 1
+        _lbl("Filtro de Status:", row)
+        self.dl_status_filter_var, _e = _ent(row, "")
+        add_placeholder(_e, "Processed, Downloaded, <vazio>"); row += 1
+
+        # Arquivos
+        ctk.CTkLabel(form, text="Arquivos", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
+        row += 1
+        _lbl("Dir. Download:", row)
+        self.dl_dir_var, _ = _ent(row, str(cfg.download_dir) if cfg else "")
+        ctk.CTkButton(form, text="Browse", width=70,
+            command=self._browse_dl_dir,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+        ).grid(row=row, column=2, padx=(4, 6), pady=4); row += 1
+        _lbl("Customer Sheet:", row)
+        self.dl_sheet_var, _ = _ent(row, str(cfg.control_sheet) if cfg else "")
+        ctk.CTkButton(form, text="Browse", width=70,
+            command=self._browse_dl_sheet,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+        ).grid(row=row, column=2, padx=(4, 6), pady=4); row += 1
+
+        # Conexão
+        ctk.CTkLabel(form, text="Conexão", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
+        row += 1
+        _lbl("EBS URL:", row)
+        self.dl_url_var, _ = _ent(row, cfg.ebs_download_url if cfg else ""); row += 1
+
+        # Colunas
+        ctk.CTkLabel(form, text="Colunas", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
+        row += 1
+        _lbl("Coluna DSNO:", row)
+        self.dl_dsno_col_var, _ = _ent(row, cfg.ebs_dsno_col if cfg else "ARGUMENT2"); row += 1
+        _lbl("Coluna Data:", row)
+        self.dl_date_col_var, _ = _ent(row, cfg.ebs_date_col if cfg else "CREATION_DATE"); row += 1
+        _lbl("Coluna Status:", row)
+        self.dl_status_col_var, _ = _ent(row, cfg.ebs_status_col if cfg else "STATUS"); row += 1
+
+        # Pastas
+        ctk.CTkLabel(form, text="Pastas", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
+        row += 1
+        indices_str = ",".join(str(x) for x in (cfg.ebs_pastas_indices if cfg else [92, 95, 101]))
+        _lbl("Índices de Pasta:", row)
+        self.dl_pastas_var, _ = _ent(row, indices_str); row += 1
+
+        # Botão iniciar
+        self.dl_start_btn = ctk.CTkButton(
+            tab,
+            text="▶  Iniciar Download",
+            height=40, corner_radius=10,
             fg_color=("#2e7d32", "#1b5e20"),
             hover_color=("#388e3c", "#2e7d32"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
-            command=self._open_download_window,
-        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+            command=self._start_download,
+        )
+        self.dl_start_btn.pack(fill="x", pady=(0, 6))
 
-        ctk.CTkButton(
-            ebs_frame,
-            text="📤  EBS Upload",
-            height=36,
+        # ── Andamento sub-tab ─────────────────────────────────────
+        prog_tab = inner_tab.tab(self._DL_TAB_PROGRESS)
+        self.dl_dashboard = ProgressDashboard(prog_tab)
+        self.dl_dashboard.pack(fill="both", expand=True, pady=4)
+
+    # ──────────────────────────────────────────────────────────────
+    # Tab: EBS Upload
+    # ──────────────────────────────────────────────────────────────
+
+    _UL_TAB_CONFIG   = "⚙  Configuração"
+    _UL_TAB_PROGRESS = "📊  Andamento"
+
+    def _build_tab_upload(self) -> None:
+        cfg = self._app_config
+        outer = self._tabview.tab(self._TAB_UPLOAD)
+
+        inner_tab = ctk.CTkTabview(
+            outer,
             corner_radius=10,
+            segmented_button_fg_color=("gray80", "gray20"),
+            segmented_button_selected_color=("#e65100", "#bf360c"),
+            segmented_button_unselected_hover_color=("gray70", "gray30"),
+        )
+        inner_tab.pack(fill="both", expand=True)
+        inner_tab.add(self._UL_TAB_CONFIG)
+        inner_tab.add(self._UL_TAB_PROGRESS)
+        self._ul_tabview = inner_tab
+
+        # ── Configuração sub-tab ──────────────────────────────────
+        tab = inner_tab.tab(self._UL_TAB_CONFIG)
+
+        form = ctk.CTkFrame(tab, fg_color="transparent")
+        form.pack(fill="x", pady=(4, 8))
+        form.columnconfigure(1, weight=1)
+
+        row = 0
+
+        def _lbl(text, r):
+            ctk.CTkLabel(
+                form, text=text, anchor="w", width=150,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            ).grid(row=r, column=0, padx=(6, 8), pady=5, sticky="w")
+
+        def _ent(r, default=""):
+            var = tk.StringVar(value=default)
+            ctk.CTkEntry(form, textvariable=var,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            ).grid(row=r, column=1, sticky="ew", pady=5, padx=(0, 6))
+            return var
+
+        # Conexão
+        ctk.CTkLabel(form, text="Conexão", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
+        row += 1
+        _lbl("EBS URL:", row)
+        self.ul_url_var = _ent(row, cfg.ebs_upload_url if cfg else ""); row += 1
+
+        # Arquivos
+        ctk.CTkLabel(form, text="Arquivos", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
+        row += 1
+        _lbl("Dir. Upload:", row)
+        self.ul_dir_var = _ent(row, str(cfg.upload_dir) if cfg else "")
+        ctk.CTkButton(form, text="Browse", width=70,
+            command=self._browse_ul_dir,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
+        ).grid(row=row, column=2, padx=(4, 6), pady=5); row += 1
+
+        # Pastas
+        ctk.CTkLabel(form, text="Pastas", anchor="w",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
+            text_color=("gray40", "gray55"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
+        row += 1
+        _lbl("Índice da Pasta:", row)
+        self.ul_pasta_var = _ent(row, str(cfg.ebs_upload_pasta_indice) if cfg else "92"); row += 1
+
+        # Botão iniciar
+        self.ul_start_btn = ctk.CTkButton(
+            tab,
+            text="▶  Iniciar Upload",
+            height=40, corner_radius=10,
             fg_color=("#e65100", "#bf360c"),
             hover_color=("#f57c00", "#e65100"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
-            command=self._open_upload_window,
-        ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+            command=self._start_upload,
+        )
+        self.ul_start_btn.pack(fill="x", pady=(0, 6))
 
-        # ── Progress Dashboard ────────────────────────────────────
-        self.dashboard = ProgressDashboard(self)
-        self.dashboard.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
+        # ── Andamento sub-tab ─────────────────────────────────────
+        prog_tab = inner_tab.tab(self._UL_TAB_PROGRESS)
+        self.ul_dashboard = ProgressDashboard(prog_tab)
+        self.ul_dashboard.pack(fill="both", expand=True, pady=4)
 
     # ──────────────────────────────────────────────────────────────
-    # Browse dialogs
+    # Browse dialogs — Processador
     # ──────────────────────────────────────────────────────────────
 
     def _browse_customer(self) -> None:
@@ -810,7 +1208,33 @@ class DSNOApp(ctk.CTk):
             self.dsno_row.set(folder)
 
     # ──────────────────────────────────────────────────────────────
-    # Processing
+    # Browse dialogs — EBS Download
+    # ──────────────────────────────────────────────────────────────
+
+    def _browse_dl_sheet(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Select Customer Sheet",
+            filetypes=[("Excel Files", "*.xlsx *.xls")],
+        )
+        if path:
+            self.dl_sheet_var.set(path)
+
+    def _browse_dl_dir(self) -> None:
+        folder = filedialog.askdirectory(title="Select Download Directory")
+        if folder:
+            self.dl_dir_var.set(folder)
+
+    # ──────────────────────────────────────────────────────────────
+    # Browse dialogs — EBS Upload
+    # ──────────────────────────────────────────────────────────────
+
+    def _browse_ul_dir(self) -> None:
+        folder = filedialog.askdirectory(title="Select Upload Directory")
+        if folder:
+            self.ul_dir_var.set(folder)
+
+    # ──────────────────────────────────────────────────────────────
+    # Processing — Processador tab
     # ──────────────────────────────────────────────────────────────
 
     def _start_processing(self) -> None:
@@ -819,7 +1243,7 @@ class DSNOApp(ctk.CTk):
         thread.start()
 
     def _make_progress_callback(self):
-        """Create a callback that routes backend events to the dashboard."""
+        """Create a callback that routes backend events to the processor dashboard."""
         def callback(event, data):
             if event == "phase":
                 self.dashboard.set_phase(data["text"])
@@ -862,392 +1286,126 @@ class DSNOApp(ctk.CTk):
         finally:
             self.run_btn.configure(state="normal")
 
+
     # ──────────────────────────────────────────────────────────────
-    # EBS Windows
+    # Browse dialogs — EBS Download
     # ──────────────────────────────────────────────────────────────
 
-    def _open_download_window(self) -> None:
-        app_config = None
-        try:
-            app_config = load_config()
-        except Exception:
-            pass
-        DownloadWindow(self, app_config)
-
-    def _open_upload_window(self) -> None:
-        app_config = None
-        try:
-            app_config = load_config()
-        except Exception:
-            pass
-        UploadWindow(self, app_config)
-
-    def _open_settings(self) -> None:
-        SettingsWindow(self, on_save=self._reload_config)
-
-    def _reload_config(self) -> None:
-        """Reload config from disk and refresh main window defaults."""
-        try:
-            app_config = load_config()
-        except ConfigurationError:
-            return
-        self.customer_row.set(str(app_config.customer_sheet))
-        self.control_row.set(str(app_config.control_sheet))
-        self.dsno_row.set(str(app_config.dsno_directory))
-        self._customer_pre_path = str(app_config.customer_sheet_pre_path)
-        logging.info("Configurações recarregadas com sucesso.")
-
-
-# ══════════════════════════════════════════════════════════════════════
-# EBS Download Window
-# ══════════════════════════════════════════════════════════════════════
-
-
-class DownloadWindow(ctk.CTkToplevel):
-    """Window for EBS file download automation."""
-
-    def __init__(self, master, app_config=None) -> None:
-        super().__init__(master)
-        self.title("📥 EBS Download")
-        self.geometry("820x700")
-        self.minsize(700, 550)
-        self._app_config = app_config
-        self._handler: _DashboardLogHandler | None = None
-
-        pad = 14
-
-        # ── Header ────────────────────────────────────────────────
-        header = ctk.CTkFrame(self, corner_radius=12)
-        header.pack(fill="x", padx=pad, pady=(pad, 8))
-        ctk.CTkLabel(
-            header,
-            text="📥  EBS File Download",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=20, weight="bold"),
-        ).pack(pady=(12, 2))
-        ctk.CTkLabel(
-            header,
-            text="Baixe arquivos DSNO do Oracle EBS automaticamente.",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            text_color="gray60",
-        ).pack(pady=(0, 12))
-
-        # ── Form fields ──────────────────────────────────────────
-        form = ctk.CTkScrollableFrame(self, corner_radius=8)
-        form.pack(fill="x", padx=pad, pady=4)
-        form.columnconfigure(1, weight=1)
-
-        row = 0
-
-        def _label(text, r):
-            ctk.CTkLabel(
-                form, text=text, anchor="w", width=140,
-                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            ).grid(row=r, column=0, padx=(0, 8), pady=3, sticky="w")
-
-        def _entry(r, default="", width=None):
-            var = tk.StringVar(value=default)
-            e = ctk.CTkEntry(
-                form, textvariable=var,
-                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            )
-            if width:
-                e.configure(width=width)
-            e.grid(row=r, column=1, sticky="ew", pady=3)
-            return var, e
-
-        # Date range
-        _label("Date Start:", row)
-        self.date_start_var, date_start_entry = _entry(row, "", width=200)
-        add_placeholder(date_start_entry, "DD/MM/YYYY HH:MM:SS")
-        row += 1
-        _label("Date End:", row)
-        self.date_end_var, date_end_entry = _entry(row, "", width=200)
-        add_placeholder(date_end_entry, "DD/MM/YYYY HH:MM:SS")
-        row += 1
-
-        # Status filter
-        _label("Status Filter:", row)
-        self.status_filter_var, status_filter_entry = _entry(row, "")
-        add_placeholder(status_filter_entry, "Processed, Downloaded, <vazio>")
-        row += 1
-
-        # Download Dir
-        _label("Download Dir:", row)
-        self.dir_var, _ = _entry(row, str(app_config.download_dir) if app_config else "")
-        ctk.CTkButton(
-            form, text="Browse", width=70, command=self._browse_dir,
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-        ).grid(row=row, column=2, padx=(4, 0), pady=3)
-        row += 1
-
-        # Customer Sheet
-        _label("Customer Sheet:", row)
-        self.sheet_var, _ = _entry(row, str(app_config.control_sheet) if app_config else "")
-        ctk.CTkButton(
-            form, text="Browse", width=70, command=self._browse_sheet,
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-        ).grid(row=row, column=2, padx=(4, 0), pady=3)
-        row += 1
-        
-        # EBS URL
-        _label("EBS URL:", row)
-        self.ebs_url_var, _ = _entry(row, app_config.ebs_download_url if app_config else "")
-        row += 1
-
-        # Columns
-        _label("DSNO Column:", row)
-        self.dsno_col_var, _ = _entry(row, app_config.ebs_dsno_col if app_config else "ARGUMENT2")
-        row += 1
-        _label("Date Column:", row)
-        self.date_col_var, _ = _entry(row, app_config.ebs_date_col if app_config else "CREATION_DATE")
-        row += 1
-        _label("Status Column:", row)
-        self.status_col_var, _ = _entry(row, app_config.ebs_status_col if app_config else "STATUS")
-        row += 1
-
-        # Pastas indices
-        indices_str = ",".join(str(x) for x in (app_config.ebs_pastas_indices if app_config else [92, 95, 101]))
-        _label("Pastas Indices:", row)
-        self.pastas_var, _ = _entry(row, indices_str)
-        row += 1
-
-        # ── Buttons ───────────────────────────────────────────────
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=pad, pady=8)
-
-        self.start_btn = ctk.CTkButton(
-            btn_frame,
-            text="▶  Iniciar Download",
-            height=38,
-            corner_radius=10,
-            fg_color=("#2e7d32", "#1b5e20"),
-            hover_color=("#388e3c", "#2e7d32"),
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
-            command=self._start_download,
-        )
-        self.start_btn.pack(fill="x")
-
-        # ── Progress Dashboard ─────────────────────────────────────
-        self.dashboard = ProgressDashboard(self)
-        self.dashboard.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
-
-    # ── Browse helpers ────────────────────────────────────────────
-    def _browse_sheet(self) -> None:
+    def _browse_dl_sheet(self) -> None:
         path = filedialog.askopenfilename(
             title="Select Customer Sheet",
             filetypes=[("Excel Files", "*.xlsx *.xls")],
         )
         if path:
-            self.sheet_var.set(path)
+            self.dl_sheet_var.set(path)
 
-    def _browse_dir(self) -> None:
+    def _browse_dl_dir(self) -> None:
         folder = filedialog.askdirectory(title="Select Download Directory")
         if folder:
-            self.dir_var.set(folder)
+            self.dl_dir_var.set(folder)
 
-    # ── Actions ───────────────────────────────────────────────────
+    # ──────────────────────────────────────────────────────────────
+    # Browse dialogs — EBS Upload
+    # ──────────────────────────────────────────────────────────────
+
+    def _browse_ul_dir(self) -> None:
+        folder = filedialog.askdirectory(title="Select Upload Directory")
+        if folder:
+            self.ul_dir_var.set(folder)
+
+    # ──────────────────────────────────────────────────────────────
+    # Processing — EBS Download tab
+    # ──────────────────────────────────────────────────────────────
+
     def _start_download(self) -> None:
-        self.start_btn.configure(state="disabled")
+        self.dl_start_btn.configure(state="disabled")
+        self._dl_tabview.set(self._DL_TAB_PROGRESS)
 
-        # Setup logging handler
-        self._handler = self.dashboard.get_log_handler()
-        logging.getLogger("dsno_processor.ebs_download").addHandler(self._handler)
+        self._dl_handler = self.dl_dashboard.get_log_handler()
+        logging.getLogger("dsno_processor.ebs_download").addHandler(self._dl_handler)
 
-        # Parse pastas indices
         try:
-            pastas = [int(x.strip()) for x in self.pastas_var.get().split(",") if x.strip()]
+            pastas = [int(x.strip()) for x in self.dl_pastas_var.get().split(",") if x.strip()]
         except ValueError:
             pastas = [92, 95, 101]
 
+        cfg = self._app_config
         config = DownloadConfig(
-            ebs_url=self.ebs_url_var.get(),
-            customer_sheet_path=self.sheet_var.get(),
-            download_dir=self.dir_var.get(),
-            email=self._app_config.ebs_email if self._app_config else "",
-            senha=self._app_config.ebs_password if self._app_config else "",
-            dsno_col=self.dsno_col_var.get(),
-            date_col=self.date_col_var.get(),
-            status_col=self.status_col_var.get(),
-            date_start=self.date_start_var.get(),
-            date_end=self.date_end_var.get(),
-            status_filter=self.status_filter_var.get(),
+            ebs_url=self.dl_url_var.get(),
+            customer_sheet_path=self.dl_sheet_var.get(),
+            download_dir=self.dl_dir_var.get(),
+            email=cfg.ebs_email if cfg else "",
+            senha=cfg.ebs_password if cfg else "",
+            dsno_col=self.dl_dsno_col_var.get(),
+            date_col=self.dl_date_col_var.get(),
+            status_col=self.dl_status_col_var.get(),
+            date_start=self.dl_date_start.get(),
+            date_end=self.dl_date_end.get(),
+            status_filter=self.dl_status_filter_var.get(),
             pastas_indices=pastas,
         )
 
-        def _progress_cb(event, data):
-            if event == "phase":
-                self.dashboard.set_phase(data["text"])
-            elif event == "total":
-                self.dashboard.reset(data["count"])
-            elif event == "success":
-                self.dashboard.mark_success(data["name"], data.get("detail", ""))
-            elif event == "error":
-                self.dashboard.mark_error(data["name"], data["detail"])
-            elif event == "skipped":
-                self.dashboard.mark_skipped(data["name"], data.get("detail", ""))
-            elif event == "finished":
-                self.dashboard.finish()
+        def _cb(event, data):
+            if event == "phase":     self.dl_dashboard.set_phase(data["text"])
+            elif event == "total":   self.dl_dashboard.reset(data["count"])
+            elif event == "success": self.dl_dashboard.mark_success(data["name"], data.get("detail", ""))
+            elif event == "error":   self.dl_dashboard.mark_error(data["name"], data["detail"])
+            elif event == "skipped": self.dl_dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "finished":self.dl_dashboard.finish()
 
-        thread = threading.Thread(
-            target=self._download_thread, args=(config, _progress_cb), daemon=True,
-        )
-        thread.start()
+        threading.Thread(target=self._download_thread, args=(config, _cb), daemon=True).start()
 
     def _download_thread(self, config: DownloadConfig, progress_cb) -> None:
         try:
             result = run_download(config, progress_callback=progress_cb)
             total = result["sucesso"] + result["ignorados"] + len(result["falhas"])
-            summary = f"Download concluído: {result['sucesso']}/{total} com sucesso."
+            summary = f"Download concluído: {result['sucesso']}/{total - result['ignorados']} com sucesso."
             logging.getLogger("dsno_processor.ebs_download").info(summary)
             messagebox.showinfo("Download", summary)
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_download").error("Erro: %s", exc)
-            self.dashboard.set_phase(f"Erro: {exc}")
-            self.dashboard.finish()
+            self.dl_dashboard.set_phase(f"Erro: {exc}")
+            self.dl_dashboard.finish()
             messagebox.showerror("Erro", str(exc))
         finally:
-            self.start_btn.configure(state="normal")
-            if self._handler:
-                logging.getLogger("dsno_processor.ebs_download").removeHandler(self._handler)
+            self.dl_start_btn.configure(state="normal")
+            if self._dl_handler:
+                logging.getLogger("dsno_processor.ebs_download").removeHandler(self._dl_handler)
 
+    # ──────────────────────────────────────────────────────────────
+    # Processing — EBS Upload tab
+    # ──────────────────────────────────────────────────────────────
 
-# ══════════════════════════════════════════════════════════════════════
-# EBS Upload Window
-# ══════════════════════════════════════════════════════════════════════
-
-class UploadWindow(ctk.CTkToplevel):
-    """Window for EBS file upload automation."""
-
-    def __init__(self, master, app_config=None) -> None:
-        super().__init__(master)
-        self.title("📤 EBS Upload")
-        self.geometry("720x550")
-        self.minsize(600, 450)
-        self._app_config = app_config
-        self._handler: _DashboardLogHandler | None = None
-
-        pad = 14
-
-        # ── Header ────────────────────────────────────────────────
-        header = ctk.CTkFrame(self, corner_radius=12)
-        header.pack(fill="x", padx=pad, pady=(pad, 8))
-        ctk.CTkLabel(
-            header,
-            text="📤  EBS File Upload",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=20, weight="bold"),
-        ).pack(pady=(12, 2))
-        ctk.CTkLabel(
-            header,
-            text="Envie arquivos DSNO processados ao Oracle EBS.",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            text_color="gray60",
-        ).pack(pady=(0, 12))
-
-        # ── Form fields ──────────────────────────────────────────
-        form = ctk.CTkFrame(self, fg_color="transparent")
-        form.pack(fill="x", padx=pad, pady=4)
-        form.columnconfigure(1, weight=1)
-
-        row = 0
-
-        def _label(text, r):
-            ctk.CTkLabel(
-                form, text=text, anchor="w", width=140,
-                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            ).grid(row=r, column=0, padx=(0, 8), pady=3, sticky="w")
-
-        def _entry(r, default=""):
-            var = tk.StringVar(value=default)
-            ctk.CTkEntry(
-                form, textvariable=var,
-                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            ).grid(row=r, column=1, sticky="ew", pady=3)
-            return var
-
-        # EBS URL
-        _label("EBS URL:", row)
-        self.ebs_url_var = _entry(row, app_config.ebs_upload_url if app_config else "")
-        row += 1
-
-        # Upload Dir
-        _label("Upload Dir:", row)
-        self.dir_var = _entry(row, str(app_config.upload_dir) if app_config else "")
-        ctk.CTkButton(
-            form, text="Browse", width=70, command=self._browse_dir,
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-        ).grid(row=row, column=2, padx=(4, 0), pady=3)
-        row += 1
-
-        # Pasta indice
-        _label("Pasta Indice:", row)
-        self.pasta_var = _entry(row, str(app_config.ebs_upload_pasta_indice) if app_config else "92")
-        row += 1
-
-        # ── Buttons ───────────────────────────────────────────────
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=pad, pady=8)
-
-        self.start_btn = ctk.CTkButton(
-            btn_frame,
-            text="▶  Iniciar Upload",
-            height=38,
-            corner_radius=10,
-            fg_color=("#e65100", "#bf360c"),
-            hover_color=("#f57c00", "#e65100"),
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
-            command=self._start_upload,
-        )
-        self.start_btn.pack(fill="x")
-
-        # ── Progress Dashboard ─────────────────────────────────────
-        self.dashboard = ProgressDashboard(self)
-        self.dashboard.pack(fill="both", expand=True, padx=pad, pady=(4, pad))
-
-    # ── Browse ────────────────────────────────────────────────────
-    def _browse_dir(self) -> None:
-        folder = filedialog.askdirectory(title="Select Upload Directory")
-        if folder:
-            self.dir_var.set(folder)
-
-    # ── Actions ───────────────────────────────────────────────────
     def _start_upload(self) -> None:
-        self.start_btn.configure(state="disabled")
+        self.ul_start_btn.configure(state="disabled")
+        self._ul_tabview.set(self._UL_TAB_PROGRESS)
 
-        # Setup logging handler
-        self._handler = self.dashboard.get_log_handler()
-        logging.getLogger("dsno_processor.ebs_upload").addHandler(self._handler)
+        self._ul_handler = self.ul_dashboard.get_log_handler()
+        logging.getLogger("dsno_processor.ebs_upload").addHandler(self._ul_handler)
 
         try:
-            pasta_idx = int(self.pasta_var.get())
+            pasta_idx = int(self.ul_pasta_var.get())
         except ValueError:
             pasta_idx = 92
 
+        cfg = self._app_config
         config = UploadConfig(
-            ebs_url=self.ebs_url_var.get(),
-            upload_dir=self.dir_var.get(),
-            email=self._app_config.ebs_email if self._app_config else "",
-            senha=self._app_config.ebs_password if self._app_config else "",
+            ebs_url=self.ul_url_var.get(),
+            upload_dir=self.ul_dir_var.get(),
+            email=cfg.ebs_email if cfg else "",
+            senha=cfg.ebs_password if cfg else "",
             pasta_indice=pasta_idx,
         )
 
-        def _progress_cb(event, data):
-            if event == "phase":
-                self.dashboard.set_phase(data["text"])
-            elif event == "total":
-                self.dashboard.reset(data["count"])
-            elif event == "success":
-                self.dashboard.mark_success(data["name"], data.get("detail", ""))
-            elif event == "error":
-                self.dashboard.mark_error(data["name"], data["detail"])
-            elif event == "skipped":
-                self.dashboard.mark_skipped(data["name"], data.get("detail", ""))
-            elif event == "finished":
-                self.dashboard.finish()
+        def _cb(event, data):
+            if event == "phase":     self.ul_dashboard.set_phase(data["text"])
+            elif event == "total":   self.ul_dashboard.reset(data["count"])
+            elif event == "success": self.ul_dashboard.mark_success(data["name"], data.get("detail", ""))
+            elif event == "error":   self.ul_dashboard.mark_error(data["name"], data["detail"])
+            elif event == "skipped": self.ul_dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "finished":self.ul_dashboard.finish()
 
-        thread = threading.Thread(
-            target=self._upload_thread, args=(config, _progress_cb), daemon=True,
-        )
-        thread.start()
+        threading.Thread(target=self._upload_thread, args=(config, _cb), daemon=True).start()
 
     def _upload_thread(self, config: UploadConfig, progress_cb) -> None:
         try:
@@ -1258,13 +1416,33 @@ class UploadWindow(ctk.CTkToplevel):
             messagebox.showinfo("Upload", summary)
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_upload").error("Erro: %s", exc)
-            self.dashboard.set_phase(f"Erro: {exc}")
-            self.dashboard.finish()
+            self.ul_dashboard.set_phase(f"Erro: {exc}")
+            self.ul_dashboard.finish()
             messagebox.showerror("Erro", str(exc))
         finally:
-            self.start_btn.configure(state="normal")
-            if self._handler:
-                logging.getLogger("dsno_processor.ebs_upload").removeHandler(self._handler)
+            self.ul_start_btn.configure(state="normal")
+            if self._ul_handler:
+                logging.getLogger("dsno_processor.ebs_upload").removeHandler(self._ul_handler)
+
+    # ──────────────────────────────────────────────────────────────
+    # Settings
+    # ──────────────────────────────────────────────────────────────
+
+    def _open_settings(self) -> None:
+        SettingsWindow(self, on_save=self._reload_config)
+
+    def _reload_config(self) -> None:
+        """Reload config from disk and refresh main window defaults."""
+        try:
+            self._app_config = load_config()
+        except ConfigurationError:
+            return
+        cfg = self._app_config
+        self.customer_row.set(str(cfg.customer_sheet))
+        self.control_row.set(str(cfg.control_sheet))
+        self.dsno_row.set(str(cfg.dsno_directory))
+        self._customer_pre_path = str(cfg.customer_sheet_pre_path)
+        logging.info("Configurações recarregadas com sucesso.")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1303,6 +1481,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._vars: dict[str, tk.StringVar] = {}
         self._path_indicators: dict[str, ctk.CTkLabel] = {}
         self._build_ui()
+        self.after(50, self._bring_to_front)
 
     # ──────────────────────────────────────────────────────────────
     # UI Construction
@@ -1376,6 +1555,11 @@ class SettingsWindow(ctk.CTkToplevel):
     # ──────────────────────────────────────────────────────────────
     # Tab builders
     # ──────────────────────────────────────────────────────────────
+
+    def _bring_to_front(self) -> None:
+        """Ensure this toplevel window is visible above the main window."""
+        self.lift()
+        self.focus_force()
 
     def _build_tab_paths(self, cfg) -> None:
         tab = self._tabview.tab("📂 Caminhos")

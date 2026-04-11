@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+from dsno_processor.exceptions import ConfigurationError
 
 
 from selenium import webdriver
@@ -46,8 +47,12 @@ def _historico_path(upload_dir: str) -> Path:
 def carregar_historico(upload_dir: str) -> dict:
     path = _historico_path(upload_dir)
     if path.exists():
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error("Arquivo de histórico malformado ou corrompido: %s. Apague o arquivo ou corrija-o.", e)
+            raise ConfigurationError("Arquivo de histórico malformado ou corrompido. Apague o arquivo ou corrija-o.")
     return {}
 
 
@@ -84,7 +89,7 @@ def listar_arquivos_locais(pasta: str) -> list[str]:
     if not arquivos:
         raise FileNotFoundError(f"Nenhum arquivo encontrado em: {pasta}")
 
-    logger.info("✅ %d arquivo(s) encontrado(s) na pasta local.", len(arquivos))
+    logger.info(" %d arquivo(s) encontrado(s) na pasta local.", len(arquivos))
     return arquivos
 
 
@@ -98,7 +103,7 @@ def iniciar_browser() -> webdriver.Chrome:
 
 def abrir_url(driver: webdriver.Chrome, url: str) -> None:
     driver.get(url)
-    logger.info("🌐 Navegador aberto.")
+    logger.info(" Navegador aberto.")
 
 
 def fazer_login_microsoft(
@@ -108,7 +113,7 @@ def fazer_login_microsoft(
     senha: str,
 ) -> None:
     """Automate Microsoft login: click 'Entrar', enter email, enter password."""
-    logger.info("🔐 Iniciando login automático Microsoft...")
+    logger.info(" Iniciando login automático Microsoft...")
 
     # Step 1: Click on "Entrar" button
     try:
@@ -133,7 +138,7 @@ def fazer_login_microsoft(
         email_input.send_keys(Keys.RETURN)
         time.sleep(3)
     except Exception as e:
-        logger.warning("   ⚠️ Erro ao inserir email: %s", e)
+        logger.warning("   ⚠ Erro ao inserir email: %s", e)
         raise
 
     # Step 3: Enter password
@@ -148,10 +153,10 @@ def fazer_login_microsoft(
         senha_input.send_keys(Keys.RETURN)
         time.sleep(5)
     except Exception as e:
-        logger.warning("   ⚠️ Erro ao inserir senha: %s", e)
+        logger.warning("   ⚠ Erro ao inserir senha: %s", e)
         raise
 
-    logger.info("✅ Login automático concluído.")
+    logger.info(" Login automático concluído.")
 
 
 def listar_pastas(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
@@ -200,7 +205,7 @@ def fazer_upload(
 
         return True
     except Exception as e:
-        logger.warning("    ⚠️  Erro durante o upload: %s", e)
+        logger.warning("    ⚠  Erro durante o upload: %s", e)
         return False
 
 
@@ -227,7 +232,7 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
     historico = carregar_historico(config.upload_dir)
     ja_feitos = [k for k, v in historico.items() if v["status"] == "sucesso"]
     if ja_feitos:
-        logger.info("📋 Histórico: %d arquivo(s) já enviado(s).", len(ja_feitos))
+        logger.info(" Histórico: %d arquivo(s) já enviado(s).", len(ja_feitos))
 
     # 2. List local files
     _cb("phase", {"text": "Listando arquivos locais..."})
@@ -246,11 +251,11 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
         _cb("skipped", {"name": a, "detail": "Já enviado"})
 
     if ignorados:
-        logger.info("⏭️  %d arquivo(s) ignorado(s) (já enviados).", ignorados)
-    logger.info("📤 %d arquivo(s) para enviar.", len(pendentes))
+        logger.info("  %d arquivo(s) ignorado(s) (já enviados).", ignorados)
+    logger.info(" %d arquivo(s) para enviar.", len(pendentes))
 
     if not pendentes:
-        logger.info("🎉 Todos os arquivos já foram enviados!")
+        logger.info(" Todos os arquivos já foram enviados!")
         _cb("finished", {})
         return {"sucesso": 0, "ignorados": ignorados, "falhas": []}
 
@@ -268,10 +273,10 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
 
     pastas = listar_pastas(driver, wait)
     # for p in pastas:
-    #     logger.info("  📂 %s", p)
+    #     logger.info("   %s", p)
 
     # 6. Upload each pending file
-    logger.info("📤 Iniciando uploads (%d arquivo(s))...", len(pendentes))
+    logger.info(" Iniciando uploads (%d arquivo(s))...", len(pendentes))
     sucesso_count = 0
     falha_lista: list[str] = []
 
@@ -283,11 +288,11 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
         sucesso = fazer_upload(driver, wait, caminho_completo, config.pasta_indice)
         if sucesso:
             registrar_sucesso(historico, arquivo, config.upload_dir)
-            logger.info("  ✅ Upload realizado!")
+            logger.info("   Upload realizado!")
             sucesso_count += 1
             _cb("success", {"name": arquivo})
         else:
-            logger.warning("  ❌ Falha no upload.")
+            logger.warning("   Falha no upload.")
             falha_lista.append(arquivo)
             _cb("error", {"name": arquivo, "detail": "Falha no upload"})
 
@@ -297,9 +302,9 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
 
     # 7. Report
     logger.info("=" * 55)
-    logger.info("  ✅ Sucesso:   %d arquivo(s)", sucesso_count)
-    logger.info("  ⏭️  Ignorados: %d arquivo(s)", ignorados)
-    logger.info("  ❌ Falha:     %d arquivo(s)", len(falha_lista))
+    logger.info("   Sucesso:   %d arquivo(s)", sucesso_count)
+    logger.info("    Ignorados: %d arquivo(s)", ignorados)
+    logger.info("   Falha:     %d arquivo(s)", len(falha_lista))
     if falha_lista:
         for f in falha_lista:
             logger.info("    - %s", f)
