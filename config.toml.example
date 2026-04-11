@@ -1,17 +1,20 @@
 [paths]
-dsno_directory = "C:\\path\\to\\dsno\\directory"
-control_sheet = "C:\\path\\to\\Control ASN Navistar.xlsx"
-customer_sheet = ""
-customer_sheet_pre_path = "C:\\path\\to\\customer\\sheets"
+dsno_directory = "C:\\Users\\ao32v\\OneDrive - Cummins\\Videos\\edi-process"
+control_sheet = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\Control ASN Navistar.xlsx"
+customer_sheet = "."
+customer_sheet_pre_path = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR"
 
 [processor]
-valid_statuses = ["Downloaded"]
+valid_statuses = [
+    "Downloaded",
+]
 
 [ebs]
-download_url = "https://your-ebs-instance.com/OA_HTML/RF.jsp?..."
-upload_url = "https://your-ebs-instance.com/OA_HTML/RF.jsp?..."
-download_dir = "C:\\path\\to\\download\\directory"
-upload_dir = "C:\\path\\to\\upload\\directory"
+download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
+upload_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
+download_dir = "C:\\Users\\ao32v\\OneDrive - Cummins\\Videos\\edi-process"
+upload_dir = "Z:\\Documentação\\ORACLE\\EDI\\Editor de DSNO\\DSNO\\processed"
+headless = true
 
 [ebs.columns]
 dsno = "ARGUMENT2"
@@ -19,9 +22,13 @@ date = "CREATION_DATE"
 status = "STATUS"
 
 [ebs.pastas]
-download_indices = [92, 95, 101]
+download_indices = [
+    92,
+    95,
+    101,
+]
 upload_indice = 92
 
 [credentials]
-email = "user@company.com"
-password = "your_password"
+email = "ao32v@cummins.com"
+password = "senha"
