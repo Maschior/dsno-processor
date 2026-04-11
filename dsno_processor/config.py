@@ -75,6 +75,7 @@ class EbsConfig:
     upload_url: str = ""
     download_dir: Path = field(default_factory=Path)
     upload_dir: Path = field(default_factory=Path)
+    headless: bool = False
     columns: EbsColumnsConfig = field(default_factory=EbsColumnsConfig)
     pastas: EbsPastasConfig = field(default_factory=EbsPastasConfig)
 
@@ -166,6 +167,10 @@ class AppConfig:
         return self.ebs.pastas.upload_indice
 
     @property
+    def ebs_headless(self) -> bool:
+        return self.ebs.headless
+
+    @property
     def ebs_email(self) -> str:
         return self.credentials.email
 
@@ -200,6 +205,7 @@ def _config_to_dict(config: AppConfig) -> dict:
             "upload_url": config.ebs.upload_url,
             "download_dir": str(config.ebs.download_dir),
             "upload_dir": str(config.ebs.upload_dir),
+            "headless": config.ebs.headless,
             "columns": {
                 "dsno": config.ebs.columns.dsno,
                 "date": config.ebs.columns.date,
@@ -244,6 +250,7 @@ def _dict_to_config(data: dict) -> AppConfig:
             upload_url=ebs_d.get("upload_url", ""),
             download_dir=Path(ebs_d.get("download_dir", "")),
             upload_dir=Path(ebs_d.get("upload_dir", "")),
+            headless=ebs_d.get("headless", False),
             columns=EbsColumnsConfig(
                 dsno=cols_d.get("dsno", "ARGUMENT2"),
                 date=cols_d.get("date", "CREATION_DATE"),

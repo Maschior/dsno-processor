@@ -43,6 +43,7 @@ class DownloadConfig:
     date_start: str = ""
     date_end: str = ""
     status_filter: str = ""
+    headless: bool = False
     pastas_indices: list[int] = field(default_factory=lambda: [92, 95, 101])
 
 
@@ -151,7 +152,7 @@ def ler_arquivos_excel(
 
 # ── Browser ──────────────────────────────────────────────────────────
 
-def iniciar_browser(download_dir: str) -> webdriver.Chrome:
+def iniciar_browser(download_dir: str, headless: bool = False) -> webdriver.Chrome:
     options = webdriver.ChromeOptions()
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     prefs = {
@@ -169,6 +170,12 @@ def iniciar_browser(download_dir: str) -> webdriver.Chrome:
     options.add_argument("--disable-features=SafeBrowsingEnhancedProtection")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+
+    if headless:
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        logger.info(" Modo headless ativado — navegador em segundo plano.")
 
     driver = webdriver.Chrome(options=options)
     driver.execute_cdp_cmd("Page.setDownloadBehavior", {
@@ -189,6 +196,7 @@ def fazer_login_microsoft(
     wait: WebDriverWait,
     email: str,
     senha: str,
+    url_alvo: str = "",
 ) -> None:
     """Automate Microsoft login: click 'Entrar', enter email, enter password."""
     logger.info(" Iniciando login automático Microsoft...")
@@ -233,6 +241,25 @@ def fazer_login_microsoft(
     except Exception as e:
         logger.warning("   ⚠ Erro ao inserir senha: %s", e)
         raise
+
+    logger.info("   → Aguardando redirecionamento para o EBS...")
+    try:
+        # Se o site perdeu a URL alvo na sessão, frequentemente cai na página principal
+        # Vamos verificar se existe o botão relatado pelo usuário ou forçar o clique/esperar.
+        xxdba_menu = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//div[normalize-space()='XXDBA Utilities']"))
+        )
+        xxdba_menu.click()
+        logger.info("   → Clicou em 'XXDBA Utilities' conforme log.")
+        time.sleep(3)
+    except Exception:
+        logger.info("   → Menu 'XXDBA Utilities' não encontrado (pode já estar na página ou o layout é diferente).")
+        pass
+
+    if url_alvo:
+        logger.info("   → Recarregando o link inicial para garantir a página correta...")
+        driver.get(url_alvo)
+        time.sleep(5)
 
     logger.info(" Login automático concluído.")
 
@@ -416,7 +443,7 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
     # 4. Start browser
     _cb("phase", {"text": "Iniciando navegador..."})
     os.makedirs(config.download_dir, exist_ok=True)
-    driver = iniciar_browser(config.download_dir)
+    driver = iniciar_browser(config.download_dir, headless=config.headless)
     wait = WebDriverWait(driver, 15)
 
     # 5. Open URL and auto-login
@@ -424,7 +451,7 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
     abrir_url(driver, config.ebs_url)
     if config.email and config.senha:
         _cb("phase", {"text": "Fazendo login automático..."})
-        fazer_login_microsoft(driver, wait, config.email, config.senha)
+        fazer_login_microsoft(driver, wait, config.email, config.senha, config.ebs_url)
 
     pastas = listar_pastas(driver, wait)
     for p in pastas:

@@ -1342,6 +1342,7 @@ class DSNOApp(ctk.CTk):
             date_start=self.dl_date_start.get(),
             date_end=self.dl_date_end.get(),
             status_filter=self.dl_status_filter_var.get(),
+            headless=cfg.ebs_headless if cfg else False,
             pastas_indices=pastas,
         )
 
@@ -1395,6 +1396,7 @@ class DSNOApp(ctk.CTk):
             email=cfg.ebs_email if cfg else "",
             senha=cfg.ebs_password if cfg else "",
             pasta_indice=pasta_idx,
+            headless=cfg.ebs_headless if cfg else False,
         )
 
         def _cb(event, data):
@@ -1646,6 +1648,32 @@ class SettingsWindow(ctk.CTkToplevel):
             mode="dir",
             hint="Pasta com os arquivos processados para upload.",
         )
+
+        # Headless mode toggle
+        row = 9
+        self._hint_label(
+            form,
+            "Quando ativado, o navegador roda em segundo plano (invisível).",
+            row,
+        )
+        row += 1
+
+        ctk.CTkLabel(
+            form, text="Modo Headless:", anchor="w", width=150,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
+
+        self._headless_var = tk.BooleanVar(
+            value=cfg.ebs.headless if cfg else False
+        )
+        ctk.CTkSwitch(
+            form,
+            text="Navegador em segundo plano",
+            variable=self._headless_var,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            onvalue=True,
+            offvalue=False,
+        ).grid(row=row, column=1, sticky="w", pady=3, columnspan=2)
 
     def _build_tab_columns(self, cfg) -> None:
         tab = self._tabview.tab("📊 Colunas")
@@ -1939,6 +1967,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 upload_url=self._vars["ebs_upload_url"].get(),
                 download_dir=_Path(self._vars["download_dir"].get()),
                 upload_dir=_Path(self._vars["upload_dir"].get()),
+                headless=self._headless_var.get(),
                 columns=EbsColumnsConfig(
                     dsno=self._vars["ebs_col_dsno"].get(),
                     date=self._vars["ebs_col_date"].get(),

@@ -36,6 +36,7 @@ class UploadConfig:
     email: str = ""
     senha: str = ""
     pasta_indice: int = 92
+    headless: bool = False
 
 
 # ── Histórico ────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ def carregar_historico(upload_dir: str) -> dict:
                 return json.load(f)
         except json.JSONDecodeError as e:
             logger.error("Arquivo de histórico malformado ou corrompido: %s. Apague o arquivo ou corrija-o.", e)
-            raise ConfigurationError("Arquivo de histórico malformado ou corrompido. Apague o arquivo ou corrija-o.")
+            raise ConfigurationError("Arquivo de histórico malformado ou corrompido. \nApague o arquivo ou corrija-o. \nLocal do arquivo: " + str(path))
     return {}
 
 
@@ -95,9 +96,16 @@ def listar_arquivos_locais(pasta: str) -> list[str]:
 
 # ── Browser ──────────────────────────────────────────────────────────
 
-def iniciar_browser() -> webdriver.Chrome:
+def iniciar_browser(headless: bool = False) -> webdriver.Chrome:
     options = webdriver.ChromeOptions()
     options.add_experimental_option("detach", True)
+
+    if headless:
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        logger.info(" Modo headless ativado — navegador em segundo plano.")
+
     return webdriver.Chrome(options=options)
 
 
@@ -111,6 +119,7 @@ def fazer_login_microsoft(
     wait: WebDriverWait,
     email: str,
     senha: str,
+    url_alvo: str = "",
 ) -> None:
     """Automate Microsoft login: click 'Entrar', enter email, enter password."""
     logger.info(" Iniciando login automático Microsoft...")
@@ -155,6 +164,25 @@ def fazer_login_microsoft(
     except Exception as e:
         logger.warning("   ⚠ Erro ao inserir senha: %s", e)
         raise
+
+    logger.info("   → Aguardando redirecionamento para o EBS...")
+    try:
+        # Se o site perdeu a URL alvo na sessão, frequentemente cai na página principal
+        # Vamos verificar se existe o botão relatado pelo usuário ou forçar o clique/esperar.
+        xxdba_menu = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//div[normalize-space()='XXDBA Utilities']"))
+        )
+        xxdba_menu.click()
+        logger.info("   → Clicou em 'XXDBA Utilities' conforme log.")
+        time.sleep(3)
+    except Exception:
+        logger.info("   → Menu 'XXDBA Utilities' não encontrado (pode já estar na página ou o layout é diferente).")
+        pass
+
+    if url_alvo:
+        logger.info("   → Recarregando o link inicial para garantir a página correta...")
+        driver.get(url_alvo)
+        time.sleep(5)
 
     logger.info(" Login automático concluído.")
 
@@ -261,7 +289,7 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
 
     # 4. Start browser
     _cb("phase", {"text": "Iniciando navegador..."})
-    driver = iniciar_browser()
+    driver = iniciar_browser(headless=config.headless)
     wait = WebDriverWait(driver, 15)
 
     # 5. Open URL and auto-login
@@ -269,7 +297,7 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
     abrir_url(driver, config.ebs_url)
     if config.email and config.senha:
         _cb("phase", {"text": "Fazendo login automático..."})
-        fazer_login_microsoft(driver, wait, config.email, config.senha)
+        fazer_login_microsoft(driver, wait, config.email, config.senha, config.ebs_url)
 
     pastas = listar_pastas(driver, wait)
     # for p in pastas:
