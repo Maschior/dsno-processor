@@ -25,6 +25,12 @@ _LEGACY_CONFIG_TXT = "config.txt"
 
 
 @dataclass
+class GeneralConfig:
+    """General application preferences."""
+
+    language: str = "en"
+
+@dataclass
 class PathsConfig:
     """File-system paths used by the processor."""
 
@@ -102,6 +108,7 @@ class AppConfig:
     - ``credentials``  – user credentials
     """
 
+    general: GeneralConfig = field(default_factory=GeneralConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     processor: ProcessorConfig = field(default_factory=ProcessorConfig)
     ebs: EbsConfig = field(default_factory=EbsConfig)
@@ -109,6 +116,10 @@ class AppConfig:
 
     # ── Backward-compatible property aliases ─────────────────────
     # These allow existing code to keep using ``cfg.dsno_directory`` etc.
+
+    @property
+    def language(self) -> str:
+        return self.general.language
 
     @property
     def dsno_directory(self) -> Path:
@@ -189,6 +200,9 @@ class AppConfig:
 def _config_to_dict(config: AppConfig) -> dict:
     """Convert an :class:`AppConfig` into a TOML-friendly nested dict."""
     return {
+        "general": {
+            "language": config.general.language,
+        },
         "paths": {
             "dsno_directory": str(config.paths.dsno_directory),
             "control_sheet": str(config.paths.control_sheet),
@@ -225,6 +239,7 @@ def _config_to_dict(config: AppConfig) -> dict:
 
 def _dict_to_config(data: dict) -> AppConfig:
     """Build an :class:`AppConfig` from a parsed TOML dict."""
+    gen_d = data.get("general", {})
     paths_d = data.get("paths", {})
     proc_d = data.get("processor", {})
     ebs_d = data.get("ebs", {})
@@ -237,6 +252,9 @@ def _dict_to_config(data: dict) -> AppConfig:
     valid_statuses = [s.strip().lower() for s in valid_raw if s.strip()]
 
     return AppConfig(
+        general=GeneralConfig(
+            language=gen_d.get("language", "en"),
+        ),
         paths=PathsConfig(
             dsno_directory=Path(paths_d.get("dsno_directory", "")),
             control_sheet=Path(paths_d.get("control_sheet", "")),
@@ -292,6 +310,7 @@ def _migrate_ini_to_toml(
     parser = configparser.ConfigParser()
     parser.read(str(ini_path), encoding="utf-8")
 
+    general_sec = parser["GENERAL"] if "GENERAL" in parser else {}
     paths_sec = parser["PATHS"] if "PATHS" in parser else {}
     ebs_sec = parser["EBS"] if "EBS" in parser else {}
 
@@ -306,6 +325,9 @@ def _migrate_ini_to_toml(
     ]
 
     config = AppConfig(
+        general=GeneralConfig(
+            language=general_sec.get("LANGUAGE", "en"),
+        ),
         paths=PathsConfig(
             dsno_directory=Path(paths_sec.get("DSNO_DIRECTORY", "")),
             control_sheet=Path(paths_sec.get("CONTROL_SHEET", "")),
