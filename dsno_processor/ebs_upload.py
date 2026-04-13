@@ -1,7 +1,7 @@
 """EBS File Upload Automation — core module.
 
-Absorbs the logic from ``dsno_download_upload/ebs_upload.py`` as
-reusable, parameterised functions that can be driven from the GUI.
+Provides reusable, parameterised functions for automating file uploads
+to Oracle EBS, driven from the GUI.
 """
 
 from __future__ import annotations
@@ -14,8 +14,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
-from dsno_processor.exceptions import ConfigurationError
-
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -23,10 +21,14 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
+from .exceptions import ConfigurationError
+
 logger = logging.getLogger(__name__)
 
 
 # ── Config dataclass ─────────────────────────────────────────────────
+
+
 @dataclass
 class UploadConfig:
     """All parameters needed for an EBS upload run."""
@@ -34,69 +36,83 @@ class UploadConfig:
     ebs_url: str
     upload_dir: str
     email: str = ""
-    senha: str = ""
-    pasta_indice: int = 92
+    password: str = ""
+    folder_index: int = 92
     headless: bool = False
 
 
-# ── Histórico ────────────────────────────────────────────────────────
+# ── History tracking ─────────────────────────────────────────────────
 
-def _historico_path(upload_dir: str) -> Path:
+
+def _history_path(upload_dir: str) -> Path:
     return Path(upload_dir) / "historico_uploads.json"
 
 
-def carregar_historico(upload_dir: str) -> dict:
-    path = _historico_path(upload_dir)
+def load_history(upload_dir: str) -> dict:
+    """Load the upload history from disk."""
+    path = _history_path(upload_dir)
     if path.exists():
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            logger.error("Arquivo de histórico malformado ou corrompido: %s. Apague o arquivo ou corrija-o.", e)
-            raise ConfigurationError("Arquivo de histórico malformado ou corrompido. \nApague o arquivo ou corrija-o. \nLocal do arquivo: " + str(path))
+            logger.error("Malformed or corrupted history file: %s", e)
+            raise ConfigurationError(
+                "Malformed or corrupted history file.\n"
+                "Delete the file or fix it manually.\n"
+                f"File location: {path}"
+            )
     return {}
 
 
-def salvar_historico(historico: dict, upload_dir: str) -> None:
-    path = _historico_path(upload_dir)
+def save_history(history: dict, upload_dir: str) -> None:
+    """Persist the upload history to disk."""
+    path = _history_path(upload_dir)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(historico, f, ensure_ascii=False, indent=2)
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
 
-def registrar_sucesso(historico: dict, nome_arquivo: str, upload_dir: str) -> None:
-    historico[nome_arquivo] = {
-        "status": "sucesso",
-        "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+def record_success(history: dict, filename: str, upload_dir: str) -> None:
+    """Mark a file as successfully uploaded in the history."""
+    history[filename] = {
+        "status": "success",
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    salvar_historico(historico, upload_dir)
+    save_history(history, upload_dir)
 
 
-def ja_enviado(historico: dict, nome_arquivo: str) -> bool:
-    return nome_arquivo in historico and historico[nome_arquivo]["status"] == "sucesso"
+def already_uploaded(history: dict, filename: str) -> bool:
+    """Check whether a file has already been uploaded."""
+    entry = history.get(filename, {})
+    return entry.get("status") in ("success", "sucesso")
 
 
-# ── Arquivos locais ──────────────────────────────────────────────────
+# ── Local files ──────────────────────────────────────────────────────
 
-def listar_arquivos_locais(pasta: str) -> list[str]:
-    if not os.path.exists(pasta):
-        raise FileNotFoundError(f"Pasta não encontrada: {pasta}")
 
-    arquivos = [
-        f for f in os.listdir(pasta)
-        if os.path.isfile(os.path.join(pasta, f)) 
+def list_local_files(directory: str) -> list[str]:
+    """List uploadable files in the given directory."""
+    if not os.path.exists(directory):
+        raise FileNotFoundError(f"Directory not found: {directory}")
+
+    files = [
+        f for f in os.listdir(directory)
+        if os.path.isfile(os.path.join(directory, f))
         and not (f.startswith("historico_") and f.endswith(".json"))
     ]
 
-    if not arquivos:
-        raise FileNotFoundError(f"Nenhum arquivo encontrado em: {pasta}")
+    if not files:
+        raise FileNotFoundError(f"No files found in: {directory}")
 
-    logger.info(" %d arquivo(s) encontrado(s) na pasta local.", len(arquivos))
-    return arquivos
+    logger.info("%d file(s) found in local directory.", len(files))
+    return files
 
 
 # ── Browser ──────────────────────────────────────────────────────────
 
-def iniciar_browser(headless: bool = False) -> webdriver.Chrome:
+
+def start_browser(headless: bool = False) -> webdriver.Chrome:
+    """Start a Chrome browser for uploads."""
     options = webdriver.ChromeOptions()
     options.add_experimental_option("detach", True)
 
@@ -104,36 +120,37 @@ def iniciar_browser(headless: bool = False) -> webdriver.Chrome:
         options.add_argument("--headless=new")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
-        logger.info(" Modo headless ativado — navegador em segundo plano.")
+        logger.info("Headless mode enabled — browser running in background.")
 
     return webdriver.Chrome(options=options)
 
 
-def abrir_url(driver: webdriver.Chrome, url: str) -> None:
+def open_url(driver: webdriver.Chrome, url: str) -> None:
+    """Navigate the browser to the given URL."""
     driver.get(url)
-    logger.info(" Navegador aberto.")
+    logger.info("Browser opened.")
 
 
-def fazer_login_microsoft(
+def perform_microsoft_login(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
     email: str,
-    senha: str,
-    url_alvo: str = "",
+    password: str,
+    target_url: str = "",
 ) -> None:
-    """Automate Microsoft login: click 'Entrar', enter email, enter password."""
-    logger.info(" Iniciando login automático Microsoft...")
+    """Automate Microsoft SSO login: click sign-in, enter email, enter password."""
+    logger.info("Starting automatic Microsoft login...")
 
-    # Step 1: Click on "Entrar" button
+    # Step 1: Click on sign-in button
     try:
-        entrar_btn = wait.until(
+        sign_in_btn = wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, ".middle.ext-middle"))
         )
-        entrar_btn.click()
-        logger.info("   → Clicou em 'Entrar'.")
+        sign_in_btn.click()
+        logger.info("Clicked sign-in button.")
         time.sleep(3)
     except Exception:
-        logger.info("   → Botão 'Entrar' não encontrado, possivelmente já na tela de login.")
+        logger.info("Sign-in button not found — possibly already on login page.")
 
     # Step 2: Enter email
     try:
@@ -142,113 +159,126 @@ def fazer_login_microsoft(
         )
         email_input.clear()
         email_input.send_keys(email)
-        logger.info("   → Email inserido.")
+        logger.info("Email entered.")
         time.sleep(1)
         email_input.send_keys(Keys.RETURN)
         time.sleep(3)
     except Exception as e:
-        logger.warning("   ⚠ Erro ao inserir email: %s", e)
+        logger.warning("Error entering email: %s", e)
         raise
 
     # Step 3: Enter password
     try:
-        senha_input = wait.until(
+        password_input = wait.until(
             EC.element_to_be_clickable((By.ID, "i0118"))
         )
-        senha_input.clear()
-        senha_input.send_keys(senha)
-        logger.info("   → Senha inserida.")
+        password_input.clear()
+        password_input.send_keys(password)
+        logger.info("Password entered.")
         time.sleep(1)
-        senha_input.send_keys(Keys.RETURN)
+        password_input.send_keys(Keys.RETURN)
         time.sleep(5)
     except Exception as e:
-        logger.warning("   ⚠ Erro ao inserir senha: %s", e)
+        logger.warning("Error entering password: %s", e)
         raise
 
-    logger.info("   → Aguardando redirecionamento para o EBS...")
+    logger.info("Waiting for EBS redirect...")
     try:
-        # Se o site perdeu a URL alvo na sessão, frequentemente cai na página principal
-        # Vamos verificar se existe o botão relatado pelo usuário ou forçar o clique/esperar.
         xxdba_menu = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//div[normalize-space()='XXDBA Utilities']"))
+            EC.element_to_be_clickable(
+                (By.XPATH, "//div[normalize-space()='XXDBA Utilities']")
+            )
         )
         xxdba_menu.click()
-        logger.info("   → Clicou em 'XXDBA Utilities' conforme log.")
+        logger.info("Clicked 'XXDBA Utilities' menu.")
         time.sleep(3)
     except Exception:
-        logger.info("   → Menu 'XXDBA Utilities' não encontrado (pode já estar na página ou o layout é diferente).")
-        pass
+        logger.info(
+            "'XXDBA Utilities' menu not found "
+            "(may already be on the correct page or layout differs)."
+        )
 
-    if url_alvo:
-        logger.info("   → Recarregando o link inicial para garantir a página correta...")
-        driver.get(url_alvo)
+    if target_url:
+        logger.info("Reloading target URL to ensure correct page...")
+        driver.get(target_url)
         time.sleep(5)
 
-    logger.info(" Login automático concluído.")
+    logger.info("Automatic login complete.")
 
 
-def listar_pastas(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
+def list_folders(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
+    """List available folders in the EBS upload path dropdown."""
     try:
-        select_el = wait.until(EC.presence_of_element_located((By.ID, "pathUpdateble")))
+        select_el = wait.until(
+            EC.presence_of_element_located((By.ID, "pathUpdateble"))
+        )
         select = Select(select_el)
-        pastas = []
+        folders = []
         for i, option in enumerate(select.options):
-            texto = option.text.strip() or "(vazio)"
-            pastas.append(f"[{i}] {texto}")
-        return pastas
+            text = option.text.strip() or "(empty)"
+            folders.append(f"[{i}] {text}")
+        return folders
     except Exception as e:
-        logger.warning("Não foi possível listar as pastas: %s", e)
+        logger.warning("Could not list folders: %s", e)
         return []
 
 
 # ── Upload ───────────────────────────────────────────────────────────
 
-def _resetar_formulario(driver, url):
+
+def _reset_form(driver, url):
+    """Reset the EBS form by reloading the page."""
     driver.get(url)
     time.sleep(3)
 
 
-def fazer_upload(
+def perform_upload(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
-    caminho_completo: str,
-    pasta_indice: int,
+    file_path: str,
+    folder_index: int,
 ) -> bool:
+    """Upload a single file to EBS."""
     try:
         # 1. Select destination folder
-        select_el = wait.until(EC.presence_of_element_located((By.ID, "pathUpdateble")))
+        select_el = wait.until(
+            EC.presence_of_element_located((By.ID, "pathUpdateble"))
+        )
         select = Select(select_el)
-        select.select_by_index(pasta_indice)
+        select.select_by_index(folder_index)
         time.sleep(2)
 
         # 2. Set file path in the file input
-        input_file = wait.until(EC.presence_of_element_located((By.ID, "FileData_oafileUpload")))
-        input_file.send_keys(caminho_completo)
+        input_file = wait.until(
+            EC.presence_of_element_located((By.ID, "FileData_oafileUpload"))
+        )
+        input_file.send_keys(file_path)
         time.sleep(2)
 
         # 3. Click Upload button
-        botao = wait.until(EC.element_to_be_clickable((By.ID, "Upload")))
-        botao.click()
+        button = wait.until(EC.element_to_be_clickable((By.ID, "Upload")))
+        button.click()
         time.sleep(4)
 
         return True
     except Exception as e:
-        logger.warning("    ⚠  Erro durante o upload: %s", e)
+        logger.warning("Error during upload: %s", e)
         return False
 
 
 # ── Orchestrator ─────────────────────────────────────────────────────
 
+
 def run_upload(config: UploadConfig, progress_callback=None) -> dict:
     """Run the full upload flow.
 
     Args:
-        config: Upload configuration (includes email/senha for auto-login).
+        config: Upload configuration.
         progress_callback: Optional ``(event, data_dict)`` callable for
             real-time progress updates consumed by the GUI dashboard.
 
     Returns:
-        A summary dict with ``sucesso``, ``ignorados``, ``falhas`` keys.
+        A summary dict with ``success``, ``skipped``, ``failures`` keys.
     """
 
     def _cb(event: str, data: dict | None = None) -> None:
@@ -256,87 +286,85 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
             progress_callback(event, data or {})
 
     # 1. Load history
-    _cb("phase", {"text": "Carregando histórico..."})
-    historico = carregar_historico(config.upload_dir)
-    ja_feitos = [k for k, v in historico.items() if v["status"] == "sucesso"]
-    if ja_feitos:
-        logger.info(" Histórico: %d arquivo(s) já enviado(s).", len(ja_feitos))
+    _cb("phase", {"text": "Loading history..."})
+    history = load_history(config.upload_dir)
+    already_done = [k for k, v in history.items() if v["status"] in ("success", "sucesso")]
+    if already_done:
+        logger.info("History: %d file(s) already uploaded.", len(already_done))
 
     # 2. List local files
-    _cb("phase", {"text": "Listando arquivos locais..."})
-    todos = listar_arquivos_locais(config.upload_dir)
+    _cb("phase", {"text": "Listing local files..."})
+    all_files = list_local_files(config.upload_dir)
 
     # 3. Filter already uploaded
-    pendentes = [a for a in todos if not ja_enviado(historico, a)]
-    ignorados_list = [a for a in todos if ja_enviado(historico, a)]
-    ignorados = len(ignorados_list)
+    pending = [f for f in all_files if not already_uploaded(history, f)]
+    skipped_list = [f for f in all_files if already_uploaded(history, f)]
+    skipped_count = len(skipped_list)
 
     # Report total (including skipped) to dashboard
-    _cb("total", {"count": len(todos)})
+    _cb("total", {"count": len(all_files)})
 
     # Report skipped items individually
-    for a in ignorados_list:
-        _cb("skipped", {"name": a, "detail": "Já enviado"})
+    for f in skipped_list:
+        _cb("skipped", {"name": f, "detail": "Already uploaded"})
 
-    if ignorados:
-        logger.info("  %d arquivo(s) ignorado(s) (já enviados).", ignorados)
-    logger.info(" %d arquivo(s) para enviar.", len(pendentes))
+    if skipped_count:
+        logger.info("%d file(s) skipped (already uploaded).", skipped_count)
+    logger.info("%d file(s) to upload.", len(pending))
 
-    if not pendentes:
-        logger.info(" Todos os arquivos já foram enviados!")
+    if not pending:
+        logger.info("All files have already been uploaded!")
         _cb("finished", {})
-        return {"sucesso": 0, "ignorados": ignorados, "falhas": []}
+        return {"success": 0, "skipped": skipped_count, "failures": []}
 
     # 4. Start browser
-    _cb("phase", {"text": "Iniciando navegador..."})
-    driver = iniciar_browser(headless=config.headless)
+    _cb("phase", {"text": "Starting browser..."})
+    driver = start_browser(headless=config.headless)
     wait = WebDriverWait(driver, 15)
 
     # 5. Open URL and auto-login
-    _cb("phase", {"text": "Abrindo EBS..."})
-    abrir_url(driver, config.ebs_url)
-    if config.email and config.senha:
-        _cb("phase", {"text": "Fazendo login automático..."})
-        fazer_login_microsoft(driver, wait, config.email, config.senha, config.ebs_url)
+    _cb("phase", {"text": "Opening EBS..."})
+    open_url(driver, config.ebs_url)
+    if config.email and config.password:
+        _cb("phase", {"text": "Performing automatic login..."})
+        perform_microsoft_login(driver, wait, config.email, config.password, config.ebs_url)
 
-    pastas = listar_pastas(driver, wait)
-    # for p in pastas:
-    #     logger.info("   %s", p)
+    list_folders(driver, wait)
 
     # 6. Upload each pending file
-    logger.info(" Iniciando uploads (%d arquivo(s))...", len(pendentes))
-    sucesso_count = 0
-    falha_lista: list[str] = []
+    logger.info("Starting uploads (%d file(s))...", len(pending))
+    success_count = 0
+    failure_list: list[str] = []
 
-    for i, arquivo in enumerate(pendentes, 1):
-        caminho_completo = os.path.join(config.upload_dir, arquivo)
-        _cb("phase", {"text": f"Enviando {arquivo} ({i}/{len(pendentes)})..."})
-        logger.info("[%d/%d] %s", i, len(pendentes), arquivo)
+    for i, filename in enumerate(pending, 1):
+        full_path = os.path.join(config.upload_dir, filename)
+        _cb("phase", {"text": f"Uploading {filename} ({i}/{len(pending)})..."})
+        logger.info("[%d/%d] %s", i, len(pending), filename)
 
-        sucesso = fazer_upload(driver, wait, caminho_completo, config.pasta_indice)
-        if sucesso:
-            registrar_sucesso(historico, arquivo, config.upload_dir)
-            logger.info("   Upload realizado!")
-            sucesso_count += 1
-            _cb("success", {"name": arquivo})
+        ok = perform_upload(driver, wait, full_path, config.folder_index)
+        if ok:
+            record_success(history, filename, config.upload_dir)
+            logger.info("Upload successful!")
+            success_count += 1
+            _cb("success", {"name": filename})
         else:
-            logger.warning("   Falha no upload.")
-            falha_lista.append(arquivo)
-            _cb("error", {"name": arquivo, "detail": "Falha no upload"})
+            logger.warning("Upload failed.")
+            failure_list.append(filename)
+            _cb("error", {"name": filename, "detail": "Upload failed"})
 
         # Reset form for the next file
-        if i < len(pendentes):
-            _resetar_formulario(driver, config.ebs_url)
+        if i < len(pending):
+            _reset_form(driver, config.ebs_url)
 
     # 7. Report
     logger.info("=" * 55)
-    logger.info("   Sucesso:   %d arquivo(s)", sucesso_count)
-    logger.info("    Ignorados: %d arquivo(s)", ignorados)
-    logger.info("   Falha:     %d arquivo(s)", len(falha_lista))
-    if falha_lista:
-        for f in falha_lista:
+    logger.info("  Success:  %d file(s)", success_count)
+    logger.info("  Skipped:  %d file(s)", skipped_count)
+    logger.info("  Failed:   %d file(s)", len(failure_list))
+    if failure_list:
+        for f in failure_list:
             logger.info("    - %s", f)
 
     _cb("finished", {})
     driver.quit()
-    return {"sucesso": sucesso_count, "ignorados": ignorados, "falhas": falha_lista}
+    return {"success": success_count, "skipped": skipped_count, "failures": failure_list}

@@ -60,11 +60,11 @@ class EbsColumnsConfig:
 
 
 @dataclass
-class EbsPastasConfig:
-    """Pasta-folder indices for download / upload."""
+class EbsFoldersConfig:
+    """Folder indices for download / upload."""
 
     download_indices: list[int] = field(default_factory=lambda: [92, 95, 101])
-    upload_indice: int = 92
+    upload_index: int = 92
 
 
 @dataclass
@@ -77,7 +77,7 @@ class EbsConfig:
     upload_dir: Path = field(default_factory=Path)
     headless: bool = False
     columns: EbsColumnsConfig = field(default_factory=EbsColumnsConfig)
-    pastas: EbsPastasConfig = field(default_factory=EbsPastasConfig)
+    folders: EbsFoldersConfig = field(default_factory=EbsFoldersConfig)
 
 
 @dataclass
@@ -98,7 +98,7 @@ class AppConfig:
     Sub-configs are grouped by domain:
     - ``paths``        – file-system paths
     - ``processor``    – processor behaviour
-    - ``ebs``          – Oracle EBS URLs, dirs, columns, pastas
+    - ``ebs``          – Oracle EBS URLs, dirs, columns, folders
     - ``credentials``  – user credentials
     """
 
@@ -159,12 +159,12 @@ class AppConfig:
         return self.ebs.columns.status
 
     @property
-    def ebs_pastas_indices(self) -> list[int]:
-        return self.ebs.pastas.download_indices
+    def ebs_folder_indices(self) -> list[int]:
+        return self.ebs.folders.download_indices
 
     @property
-    def ebs_upload_pasta_indice(self) -> int:
-        return self.ebs.pastas.upload_indice
+    def ebs_upload_folder_index(self) -> int:
+        return self.ebs.folders.upload_index
 
     @property
     def ebs_headless(self) -> bool:
@@ -211,9 +211,9 @@ def _config_to_dict(config: AppConfig) -> dict:
                 "date": config.ebs.columns.date,
                 "status": config.ebs.columns.status,
             },
-            "pastas": {
-                "download_indices": config.ebs.pastas.download_indices,
-                "upload_indice": config.ebs.pastas.upload_indice,
+            "folders": {
+                "download_indices": config.ebs.folders.download_indices,
+                "upload_index": config.ebs.folders.upload_index,
             },
         },
         "credentials": {
@@ -229,7 +229,8 @@ def _dict_to_config(data: dict) -> AppConfig:
     proc_d = data.get("processor", {})
     ebs_d = data.get("ebs", {})
     cols_d = ebs_d.get("columns", {})
-    pastas_d = ebs_d.get("pastas", {})
+    # Backward compat: accept both "folders" (new) and "pastas" (legacy)
+    folders_d = ebs_d.get("folders", ebs_d.get("pastas", {}))
     cred_d = data.get("credentials", {})
 
     valid_raw = proc_d.get("valid_statuses", ["Downloaded"])
@@ -256,11 +257,15 @@ def _dict_to_config(data: dict) -> AppConfig:
                 date=cols_d.get("date", "CREATION_DATE"),
                 status=cols_d.get("status", "STATUS"),
             ),
-            pastas=EbsPastasConfig(
-                download_indices=pastas_d.get(
+            folders=EbsFoldersConfig(
+                download_indices=folders_d.get(
                     "download_indices", [92, 95, 101]
                 ),
-                upload_indice=pastas_d.get("upload_indice", 92),
+                # Backward compat: accept "upload_index" or "upload_indice"
+                upload_index=folders_d.get(
+                    "upload_index",
+                    folders_d.get("upload_indice", 92),
+                ),
             ),
         ),
         credentials=CredentialsConfig(
@@ -290,9 +295,9 @@ def _migrate_ini_to_toml(
     paths_sec = parser["PATHS"] if "PATHS" in parser else {}
     ebs_sec = parser["EBS"] if "EBS" in parser else {}
 
-    pastas_raw = ebs_sec.get("PASTAS_INDICES", "92,95,101")
-    pastas_indices = [
-        int(x.strip()) for x in pastas_raw.split(",") if x.strip()
+    folder_indices_raw = ebs_sec.get("PASTAS_INDICES", "92,95,101")
+    folder_indices = [
+        int(x.strip()) for x in folder_indices_raw.split(",") if x.strip()
     ]
 
     valid_raw = paths_sec.get("PROCESSOR_VALID_STATUSES", "Downloaded")
@@ -320,9 +325,9 @@ def _migrate_ini_to_toml(
                 date=ebs_sec.get("DATE_COL", "CREATION_DATE"),
                 status=ebs_sec.get("STATUS_COL", "STATUS"),
             ),
-            pastas=EbsPastasConfig(
-                download_indices=pastas_indices,
-                upload_indice=int(
+            folders=EbsFoldersConfig(
+                download_indices=folder_indices,
+                upload_index=int(
                     ebs_sec.get("UPLOAD_PASTA_INDICE", "92")
                 ),
             ),

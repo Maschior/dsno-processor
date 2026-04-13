@@ -21,13 +21,13 @@ dsno = "ARGUMENT2"
 date = "CREATION_DATE"
 status = "STATUS"
 
-[ebs.pastas]
+[ebs.folders]
 download_indices = [
     92,
     95,
     101,
 ]
-upload_indice = 92
+upload_index = 92
 
 [credentials]
 email = "ao32v@cummins.com"

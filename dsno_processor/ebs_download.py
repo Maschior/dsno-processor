@@ -1,7 +1,7 @@
 """EBS File Download Automation — core module.
 
-Absorbs the logic from ``dsno_download_upload/ebs_download.py`` as
-reusable, parameterised functions that can be driven from the GUI.
+Provides reusable, parameterised functions for automating file downloads
+from Oracle EBS, driven from the GUI.
 """
 
 from __future__ import annotations
@@ -14,20 +14,23 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
-from dsno_processor.exceptions import ConfigurationError
 
-import requests
 import openpyxl
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
+from .exceptions import ConfigurationError
+
 logger = logging.getLogger(__name__)
 
 
 # ── Config dataclass ─────────────────────────────────────────────────
+
+
 @dataclass
 class DownloadConfig:
     """All parameters needed for an EBS download run."""
@@ -36,7 +39,7 @@ class DownloadConfig:
     customer_sheet_path: str
     download_dir: str
     email: str = ""
-    senha: str = ""
+    password: str = ""
     dsno_col: str = "ARGUMENT2"
     date_col: str = "CREATION_DATE"
     status_col: str = "STATUS"
@@ -44,48 +47,59 @@ class DownloadConfig:
     date_end: str = ""
     status_filter: str = ""
     headless: bool = False
-    pastas_indices: list[int] = field(default_factory=lambda: [92, 95, 101])
+    folder_indices: list[int] = field(default_factory=lambda: [92, 95, 101])
 
 
-# ── Histórico ────────────────────────────────────────────────────────
+# ── History tracking ─────────────────────────────────────────────────
 
-def _historico_path(download_dir: str) -> Path:
+
+def _history_path(download_dir: str) -> Path:
     return Path(download_dir) / "historico_downloads.json"
 
 
-def carregar_historico(download_dir: str) -> dict:
-    path = _historico_path(download_dir)
+def load_history(download_dir: str) -> dict:
+    """Load the download history from disk."""
+    path = _history_path(download_dir)
     if path.exists():
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            logger.error("Arquivo de histórico malformado ou vazio: %s. Apague o arquivo ou corrija-o.", e)
-            raise ConfigurationError("Arquivo de histórico malformado ou corrompido. \nApague o arquivo ou corrija-o. \nLocal do arquivo: " + str(path))
+            logger.error("Malformed or empty history file: %s", e)
+            raise ConfigurationError(
+                "Malformed or corrupted history file.\n"
+                "Delete the file or fix it manually.\n"
+                f"File location: {path}"
+            )
     return {}
 
 
-def salvar_historico(historico: dict, download_dir: str) -> None:
-    path = _historico_path(download_dir)
+def save_history(history: dict, download_dir: str) -> None:
+    """Persist the download history to disk."""
+    path = _history_path(download_dir)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(historico, f, ensure_ascii=False, indent=2)
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
 
-def registrar_sucesso(historico: dict, nome_arquivo: str, download_dir: str) -> None:
-    historico[nome_arquivo] = {
-        "status": "sucesso",
-        "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+def record_success(history: dict, filename: str, download_dir: str) -> None:
+    """Mark a file as successfully downloaded in the history."""
+    history[filename] = {
+        "status": "success",
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    salvar_historico(historico, download_dir)
+    save_history(history, download_dir)
 
 
-def ja_baixado(historico: dict, nome_arquivo: str) -> bool:
-    return nome_arquivo in historico and historico[nome_arquivo]["status"] == "sucesso"
+def already_downloaded(history: dict, filename: str) -> bool:
+    """Check whether a file has already been downloaded."""
+    entry = history.get(filename, {})
+    return entry.get("status") in ("success", "sucesso")
 
 
 # ── Excel ────────────────────────────────────────────────────────────
 
-def ler_arquivos_excel(
+
+def read_files_from_excel(
     path: str,
     dsno_col: str,
     date_col: str,
@@ -100,21 +114,23 @@ def ler_arquivos_excel(
 
     headers = [cell.value for cell in ws[1]]
     if dsno_col not in headers:
-        raise ValueError(f"Coluna '{dsno_col}' não encontrada. Colunas disponíveis: {headers}")
+        raise ValueError(
+            f"Column '{dsno_col}' not found. Available columns: {headers}"
+        )
 
     dsno_col_idx = headers.index(dsno_col)
     date_col_idx = headers.index(date_col) if date_col in headers else None
     status_col_idx = headers.index(status_col) if status_col in headers else None
 
     if date_col_idx is None:
-        raise ValueError(f"Coluna '{date_col}' não encontrada.")
+        raise ValueError(f"Column '{date_col}' not found.")
 
     start = datetime.strptime(date_start, "%d/%m/%Y %H:%M:%S") if date_start else None
     end = datetime.strptime(date_end, "%d/%m/%Y %H:%M:%S") if date_end else None
 
-    arquivos: list[str] = []
+    files: list[str] = []
     for row in ws.iter_rows(min_row=2, values_only=True):
-        valor = row[dsno_col_idx]
+        value = row[dsno_col_idx]
         date = row[date_col_idx]
 
         if status_col_idx is not None:
@@ -131,7 +147,7 @@ def ler_arquivos_excel(
             else:
                 continue
 
-        if not valor or date is None:
+        if not value or date is None:
             continue
 
         # Apply date filter
@@ -144,15 +160,17 @@ def ler_arquivos_excel(
             if status is None or status.lower().strip() != status_filter.lower().strip():
                 continue
 
-        arquivos.append(str(valor).strip())
+        files.append(str(value).strip())
 
-    logger.info(" %d arquivo(s) encontrado(s) na planilha.", len(arquivos))
-    return arquivos
+    logger.info("%d file(s) found in spreadsheet.", len(files))
+    return files
 
 
 # ── Browser ──────────────────────────────────────────────────────────
 
-def iniciar_browser(download_dir: str, headless: bool = False) -> webdriver.Chrome:
+
+def start_browser(download_dir: str, headless: bool = False) -> webdriver.Chrome:
+    """Start a Chrome browser configured for file downloads."""
     options = webdriver.ChromeOptions()
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     prefs = {
@@ -175,42 +193,43 @@ def iniciar_browser(download_dir: str, headless: bool = False) -> webdriver.Chro
         options.add_argument("--headless=new")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
-        logger.info(" Modo headless ativado — navegador em segundo plano.")
+        logger.info("Headless mode enabled — browser running in background.")
 
     driver = webdriver.Chrome(options=options)
     driver.execute_cdp_cmd("Page.setDownloadBehavior", {
         "behavior": "allow",
-        "downloadPath": download_dir
+        "downloadPath": download_dir,
     })
-    
+
     return driver
 
 
-def abrir_url(driver: webdriver.Chrome, url: str) -> None:
+def open_url(driver: webdriver.Chrome, url: str) -> None:
+    """Navigate the browser to the given URL."""
     driver.get(url)
-    logger.info(" Navegador aberto.")
+    logger.info("Browser opened.")
 
 
-def fazer_login_microsoft(
+def perform_microsoft_login(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
     email: str,
-    senha: str,
-    url_alvo: str = "",
+    password: str,
+    target_url: str = "",
 ) -> None:
-    """Automate Microsoft login: click 'Entrar', enter email, enter password."""
-    logger.info(" Iniciando login automático Microsoft...")
+    """Automate Microsoft SSO login: click sign-in, enter email, enter password."""
+    logger.info("Starting automatic Microsoft login...")
 
-    # Step 1: Click on "Entrar" button
+    # Step 1: Click on sign-in button
     try:
-        entrar_btn = wait.until(
+        sign_in_btn = wait.until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, ".middle.ext-middle"))
         )
-        entrar_btn.click()
-        logger.info("   → Clicou em 'Entrar'.")
+        sign_in_btn.click()
+        logger.info("Clicked sign-in button.")
         time.sleep(3)
     except Exception:
-        logger.info("   → Botão 'Entrar' não encontrado, possivelmente já na tela de login.")
+        logger.info("Sign-in button not found — possibly already on login page.")
 
     # Step 2: Enter email
     try:
@@ -219,105 +238,112 @@ def fazer_login_microsoft(
         )
         email_input.clear()
         email_input.send_keys(email)
-        logger.info("   → Email inserido.")
+        logger.info("Email entered.")
         time.sleep(1)
         email_input.send_keys(Keys.RETURN)
         time.sleep(3)
     except Exception as e:
-        logger.warning("   ⚠ Erro ao inserir email: %s", e)
+        logger.warning("Error entering email: %s", e)
         raise
 
     # Step 3: Enter password
     try:
-        senha_input = wait.until(
+        password_input = wait.until(
             EC.element_to_be_clickable((By.ID, "i0118"))
         )
-        senha_input.clear()
-        senha_input.send_keys(senha)
-        logger.info("   → Senha inserida.")
+        password_input.clear()
+        password_input.send_keys(password)
+        logger.info("Password entered.")
         time.sleep(1)
-        senha_input.send_keys(Keys.RETURN)
+        password_input.send_keys(Keys.RETURN)
         time.sleep(5)
     except Exception as e:
-        logger.warning("   ⚠ Erro ao inserir senha: %s", e)
+        logger.warning("Error entering password: %s", e)
         raise
 
-    logger.info("   → Aguardando redirecionamento para o EBS...")
+    logger.info("Waiting for EBS redirect...")
     try:
-        # Se o site perdeu a URL alvo na sessão, frequentemente cai na página principal
-        # Vamos verificar se existe o botão relatado pelo usuário ou forçar o clique/esperar.
         xxdba_menu = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//div[normalize-space()='XXDBA Utilities']"))
+            EC.element_to_be_clickable(
+                (By.XPATH, "//div[normalize-space()='XXDBA Utilities']")
+            )
         )
         xxdba_menu.click()
-        logger.info("   → Clicou em 'XXDBA Utilities' conforme log.")
+        logger.info("Clicked 'XXDBA Utilities' menu.")
         time.sleep(3)
     except Exception:
-        logger.info("   → Menu 'XXDBA Utilities' não encontrado (pode já estar na página ou o layout é diferente).")
-        pass
+        logger.info(
+            "'XXDBA Utilities' menu not found "
+            "(may already be on the correct page or layout differs)."
+        )
 
-    if url_alvo:
-        logger.info("   → Recarregando o link inicial para garantir a página correta...")
-        driver.get(url_alvo)
+    if target_url:
+        logger.info("Reloading target URL to ensure correct page...")
+        driver.get(target_url)
         time.sleep(5)
 
-    logger.info(" Login automático concluído.")
+    logger.info("Automatic login complete.")
 
 
-def listar_pastas(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
+def list_folders(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
+    """List available folders in the EBS file path dropdown."""
     try:
         select_el = wait.until(EC.presence_of_element_located((By.ID, "FilePath")))
         select = Select(select_el)
-        pastas = []
+        folders = []
         for i, option in enumerate(select.options):
-            texto = option.text.strip() or "(vazio)"
-            pastas.append(f"[{i}] {texto}")
-        return pastas
+            text = option.text.strip() or "(empty)"
+            folders.append(f"[{i}] {text}")
+        return folders
     except Exception as e:
-        logger.warning("Não foi possível listar as pastas: %s", e)
+        logger.warning("Could not list folders: %s", e)
         return []
 
 
 # ── Download ─────────────────────────────────────────────────────────
 
-def _selecionar_pasta(driver, wait, indice):
+
+def _select_folder(driver, wait, index):
+    """Select a folder by index in the EBS dropdown."""
     select_el = wait.until(EC.presence_of_element_located((By.ID, "FilePath")))
     select = Select(select_el)
-    select.select_by_index(indice)
+    select.select_by_index(index)
     time.sleep(3)
 
 
-def _arquivo_encontrado(driver):
+def _file_found(driver):
+    """Check if the file name input field is available."""
     try:
-        campo = driver.find_element(By.ID, "FileName")
-        return campo.is_displayed() and campo.is_enabled()
+        field = driver.find_element(By.ID, "FileName")
+        return field.is_displayed() and field.is_enabled()
     except Exception:
         return False
 
 
-def _tentar_download(driver, wait, nome_arquivo, config: DownloadConfig):
+def _attempt_download(driver, wait, filename, config: DownloadConfig):
+    """Try to download a file from the current folder."""
     try:
-        campo = wait.until(EC.element_to_be_clickable((By.ID, "FileName")))
-        campo.clear()
-        campo.send_keys(nome_arquivo)
+        field = wait.until(EC.element_to_be_clickable((By.ID, "FileName")))
+        field.clear()
+        field.send_keys(filename)
         time.sleep(5)
-        campo.send_keys(Keys.TAB)
+        field.send_keys(Keys.TAB)
         time.sleep(1)
-        
-        # Limpa os logs de performance anteriores para focar apenas nos novos logs
+
+        # Clear previous performance logs to focus on new events
         driver.get_log("performance")
-        
-        botao = wait.until(EC.element_to_be_clickable((By.ID, "Download")))
-        botao.click()
-        
-        # Intercepta e monitora o download nativo via CDP Network
-        logger.info("     Monitorando o arquivo via CDP Network...")
+
+        button = wait.until(EC.element_to_be_clickable((By.ID, "Download")))
+        button.click()
+
+        # Monitor native download via CDP Network
+        logger.info("Monitoring file via CDP Network...")
         download_guid = None
-        suggested_name = nome_arquivo
+        suggested_name = filename
         completed = False
         start_time = time.time()
-        
-        # Espera de até 120 segundos para o arquivo concluir o download
+
+        # Wait up to 120 seconds for download to complete
         while time.time() - start_time < 120:
             logs = driver.get_log("performance")
             for entry in logs:
@@ -327,73 +353,79 @@ def _tentar_download(driver, wait, nome_arquivo, config: DownloadConfig):
                         download_guid = msg["params"]["guid"]
                         if "suggestedFilename" in msg["params"]:
                             suggested_name = msg["params"]["suggestedFilename"]
-                            logger.info("     Arquivo detectado: %s", suggested_name)
+                            logger.info("File detected: %s", suggested_name)
                     elif msg["method"] == "Page.downloadProgress":
                         if download_guid and msg["params"].get("guid") == download_guid:
                             if msg["params"]["state"] == "completed":
                                 completed = True
                 except Exception:
                     pass
-            
+
             if completed:
                 break
             time.sleep(1)
-            
+
         if completed:
-            logger.info("     Download nativo concluído com sucesso: %s", suggested_name)
+            logger.info("Native download completed successfully: %s", suggested_name)
             return True
         else:
-            logger.warning("    ⚠  Tempo limite excedido aguardando o download (CDP Timeout).")
+            logger.warning("Timeout waiting for download (CDP Timeout).")
             return False
     except Exception as e:
-        logger.warning("    ⚠  Erro ao tentar download: %s", e)
+        logger.warning("Error attempting download: %s", e)
         return False
 
 
-def _resetar_formulario(driver, url):
+def _reset_form(driver, url):
+    """Reset the EBS form by reloading the page."""
     driver.get(url)
     time.sleep(3)
 
 
-def baixar_arquivo(
+def download_file(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
-    nome_arquivo: str,
+    filename: str,
     config: DownloadConfig,
 ) -> bool:
-    for i, indice in enumerate(config.pastas_indices, 1):
-        logger.info("     Tentando pasta %d/%d (índice %d)...", i, len(config.pastas_indices), indice)
+    """Try to download a file, iterating through all configured folders."""
+    for i, index in enumerate(config.folder_indices, 1):
+        logger.info(
+            "Trying folder %d/%d (index %d)...",
+            i, len(config.folder_indices), index,
+        )
         try:
-            _selecionar_pasta(driver, wait, indice)
+            _select_folder(driver, wait, index)
         except Exception as e:
-            logger.warning("    ⚠  Não foi possível selecionar a pasta %d: %s", i, e)
-            _resetar_formulario(driver, config.ebs_url)
+            logger.warning("Could not select folder %d: %s", i, e)
+            _reset_form(driver, config.ebs_url)
             continue
 
-        if not _arquivo_encontrado(driver):
-            logger.info("    ↩  Campo de arquivo não disponível nessa pasta.")
-            _resetar_formulario(driver, config.ebs_url)
+        if not _file_found(driver):
+            logger.info("File input not available in this folder.")
+            _reset_form(driver, config.ebs_url)
             continue
 
-        if _tentar_download(driver, wait, nome_arquivo, config):
+        if _attempt_download(driver, wait, filename, config):
             return True
-        _resetar_formulario(driver, config.ebs_url)
+        _reset_form(driver, config.ebs_url)
 
     return False
 
 
 # ── Orchestrator ─────────────────────────────────────────────────────
 
+
 def run_download(config: DownloadConfig, progress_callback=None) -> dict:
     """Run the full download flow.
 
     Args:
-        config: Download configuration (includes email/senha for auto-login).
+        config: Download configuration.
         progress_callback: Optional ``(event, data_dict)`` callable for
             real-time progress updates consumed by the GUI dashboard.
 
     Returns:
-        A summary dict with ``sucesso``, ``ignorados``, ``falhas`` keys.
+        A summary dict with ``success``, ``skipped``, ``failures`` keys.
     """
 
     def _cb(event: str, data: dict | None = None) -> None:
@@ -401,15 +433,15 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
             progress_callback(event, data or {})
 
     # 1. Load history
-    _cb("phase", {"text": "Carregando histórico..."})
-    historico = carregar_historico(config.download_dir)
-    ja_feitos = [k for k, v in historico.items() if v["status"] == "sucesso"]
-    if ja_feitos:
-        logger.info(" Histórico: %d arquivo(s) já baixado(s).", len(ja_feitos))
+    _cb("phase", {"text": "Loading history..."})
+    history = load_history(config.download_dir)
+    already_done = [k for k, v in history.items() if v["status"] in ("success", "sucesso")]
+    if already_done:
+        logger.info("History: %d file(s) already downloaded.", len(already_done))
 
     # 2. Read spreadsheet
-    _cb("phase", {"text": "Lendo planilha..."})
-    todos = ler_arquivos_excel(
+    _cb("phase", {"text": "Reading spreadsheet..."})
+    all_files = read_files_from_excel(
         config.customer_sheet_path,
         config.dsno_col,
         config.date_col,
@@ -420,73 +452,75 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
     )
 
     # 3. Filter already downloaded
-    pendentes = [a for a in todos if not ja_baixado(historico, a)]
-    ignorados_list = [a for a in todos if ja_baixado(historico, a)]
-    ignorados = len(ignorados_list)
+    pending = [f for f in all_files if not already_downloaded(history, f)]
+    skipped_list = [f for f in all_files if already_downloaded(history, f)]
+    skipped_count = len(skipped_list)
 
     # Report total (including skipped) to dashboard
-    _cb("total", {"count": len(todos)})
+    _cb("total", {"count": len(all_files)})
 
     # Report skipped items individually
-    for a in ignorados_list:
-        _cb("skipped", {"name": a, "detail": "Já baixado"})
+    for f in skipped_list:
+        _cb("skipped", {"name": f, "detail": "Already downloaded"})
 
-    if ignorados:
-        logger.info("  %d arquivo(s) ignorado(s) (já baixados).", ignorados)
-    logger.info(" %d arquivo(s) para baixar.", len(pendentes))
+    if skipped_count:
+        logger.info("%d file(s) skipped (already downloaded).", skipped_count)
+    logger.info("%d file(s) to download.", len(pending))
 
-    if not pendentes:
-        logger.info(" Todos os arquivos já foram baixados!")
+    if not pending:
+        logger.info("All files have already been downloaded!")
         _cb("finished", {})
-        return {"sucesso": 0, "ignorados": ignorados, "falhas": []}
+        return {"success": 0, "skipped": skipped_count, "failures": []}
 
     # 4. Start browser
-    _cb("phase", {"text": "Iniciando navegador..."})
+    _cb("phase", {"text": "Starting browser..."})
     os.makedirs(config.download_dir, exist_ok=True)
-    driver = iniciar_browser(config.download_dir, headless=config.headless)
+    driver = start_browser(config.download_dir, headless=config.headless)
     wait = WebDriverWait(driver, 15)
 
     # 5. Open URL and auto-login
-    _cb("phase", {"text": "Abrindo EBS..."})
-    abrir_url(driver, config.ebs_url)
-    if config.email and config.senha:
-        _cb("phase", {"text": "Fazendo login automático..."})
-        fazer_login_microsoft(driver, wait, config.email, config.senha, config.ebs_url)
+    _cb("phase", {"text": "Opening EBS..."})
+    open_url(driver, config.ebs_url)
+    if config.email and config.password:
+        _cb("phase", {"text": "Performing automatic login..."})
+        perform_microsoft_login(driver, wait, config.email, config.password, config.ebs_url)
 
-    pastas = listar_pastas(driver, wait)
-    for p in pastas:
-        logger.info("   %s", p)
+    folders = list_folders(driver, wait)
+    for f in folders:
+        logger.info("  %s", f)
 
     # 6. Download files
-    logger.info(" Iniciando downloads (%d arquivo(s))...", len(pendentes))
-    sucesso_count = 0
-    falha_lista: list[str] = []
+    logger.info("Starting downloads (%d file(s))...", len(pending))
+    success_count = 0
+    failure_list: list[str] = []
 
-    for i, arquivo in enumerate(pendentes, 1):
-        _cb("phase", {"text": f"Baixando {arquivo} ({i}/{len(pendentes)})..."})
-        logger.info("[%d/%d] %s", i, len(pendentes), arquivo)
-        encontrado = baixar_arquivo(driver, wait, arquivo, config)
-        if encontrado:
-            registrar_sucesso(historico, arquivo, config.download_dir)
-            logger.info("   Download iniciado!")
-            sucesso_count += 1
-            _cb("success", {"name": arquivo})
+    for i, filename in enumerate(pending, 1):
+        _cb("phase", {"text": f"Downloading {filename} ({i}/{len(pending)})..."})
+        logger.info("[%d/%d] %s", i, len(pending), filename)
+        found = download_file(driver, wait, filename, config)
+        if found:
+            record_success(history, filename, config.download_dir)
+            logger.info("Download started!")
+            success_count += 1
+            _cb("success", {"name": filename})
         else:
-            logger.warning("   Não encontrado em nenhuma das %d pastas.", len(config.pastas_indices))
-            falha_lista.append(arquivo)
-            _cb("error", {"name": arquivo, "detail": "Não encontrado nas pastas"})
+            logger.warning(
+                "Not found in any of the %d folders.", len(config.folder_indices)
+            )
+            failure_list.append(filename)
+            _cb("error", {"name": filename, "detail": "Not found in folders"})
         time.sleep(1)
 
     # 7. Report
     logger.info("=" * 55)
-    logger.info("   Sucesso:   %d arquivo(s)", sucesso_count)
-    logger.info("    Ignorados: %d arquivo(s)", ignorados)
-    logger.info("   Falha:     %d arquivo(s)", len(falha_lista))
-    if falha_lista:
-        for f in falha_lista:
+    logger.info("  Success:  %d file(s)", success_count)
+    logger.info("  Skipped:  %d file(s)", skipped_count)
+    logger.info("  Failed:   %d file(s)", len(failure_list))
+    if failure_list:
+        for f in failure_list:
             logger.info("    - %s", f)
-    logger.info("   Downloads: %s", config.download_dir)
+    logger.info("  Downloads: %s", config.download_dir)
 
     _cb("finished", {})
     driver.quit()
-    return {"sucesso": sucesso_count, "ignorados": ignorados, "falhas": falha_lista}
+    return {"success": success_count, "skipped": skipped_count, "failures": failure_list}

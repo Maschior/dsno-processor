@@ -12,6 +12,7 @@ from .info_reader import get_dsno_info
 from .invoice_reader import get_invoice_dsno_pairs
 from .models import DateRange, DsnoInfo, ProcessingResult
 from .status_updater import update_control_sheet_status
+
 log = logging.getLogger(__name__)
 
 
@@ -105,14 +106,14 @@ def process_dsno(
     setup_logger()
     result = ProcessingResult()
 
-    _cb("phase", {"text": "Iniciando processamento..."})
+    _cb("phase", {"text": "Starting processing..."})
     log.info("Starting processing...")
     log.info("Customer Sheet: %s", customer_sheet)
     log.info("Control Sheet: %s", control_sheet)
     log.info("Date Range: %s", date_range)
     log.info("DSNO Target Directory: %s", dsno_dir)
 
-    _cb("phase", {"text": "Lendo planilha de controle..."})
+    _cb("phase", {"text": "Reading control sheet..."})
     parsed_range = DateRange.from_string(date_range)
     pairs = get_invoice_dsno_pairs(parsed_range, control_sheet)
 
@@ -123,7 +124,7 @@ def process_dsno(
 
     for invoice, dsno_filename in pairs:
         dsno_path = base_dir / dsno_filename
-        _cb("phase", {"text": f"Processando {dsno_path.name}..."})
+        _cb("phase", {"text": f"Processing {dsno_path.name}..."})
         log.info("---- Processing DSNO: %s ----", dsno_path.name)
 
         error = _process_single_dsno(
@@ -142,7 +143,7 @@ def process_dsno(
             _cb("success", {"name": dsno_path.name})
 
     # Update CONTROL_SHEET status after processing all DSNO files
-    _cb("phase", {"text": "Atualizando planilha de controle..."})
+    _cb("phase", {"text": "Updating control sheet..."})
     update_control_sheet_status(control_sheet, processed_dir)
 
     log.info(

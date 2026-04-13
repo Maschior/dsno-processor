@@ -17,7 +17,7 @@ from dsno_processor.config import (
     CredentialsConfig,
     EbsColumnsConfig,
     EbsConfig,
-    EbsPastasConfig,
+    EbsFoldersConfig,
     PathsConfig,
     ProcessorConfig,
     load_config,
@@ -85,7 +85,7 @@ class _CalendarPopup(ctk.CTkToplevel):
     section and Apply/Cancel buttons are shown; otherwise clicking a day
     immediately confirms the selection and closes the popup."""
 
-    _DAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    _DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     _CELL = 38  # px per column
 
     def __init__(
@@ -126,7 +126,7 @@ class _CalendarPopup(ctk.CTkToplevel):
 
             ctk.CTkLabel(
                 time_frame,
-                text="Horário",
+                text="Time",
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
                 text_color=("gray40", "gray55"),
             ).pack(pady=(6, 2))
@@ -186,12 +186,12 @@ class _CalendarPopup(ctk.CTkToplevel):
             # Apply / Cancel buttons
             btn_row = ctk.CTkFrame(outer, fg_color="transparent")
             btn_row.pack(fill="x", padx=8, pady=(0, 8))
-            ctk.CTkButton(btn_row, text="Cancelar", width=90, height=30, corner_radius=6,
+            ctk.CTkButton(btn_row, text="Cancel", width=90, height=30, corner_radius=6,
                 fg_color=("gray70", "gray30"), hover_color=("gray60", "gray40"),
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
                 command=self.destroy,
             ).pack(side="left", expand=True, padx=(0, 4))
-            ctk.CTkButton(btn_row, text="✔  Aplicar", width=90, height=30, corner_radius=6,
+            ctk.CTkButton(btn_row, text="✔  Apply", width=90, height=30, corner_radius=6,
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=12, weight="bold"),
                 command=self._apply,
             ).pack(side="left", expand=True, padx=(4, 0))
@@ -256,7 +256,7 @@ class _CalendarPopup(ctk.CTkToplevel):
         grid.pack(fill="x", pady=(4, 0))
         for col in range(7):
             grid.columnconfigure(col, minsize=cell)
-        for col, d in enumerate(self._DAYS_PT):
+        for col, d in enumerate(self._DAYS):
             ctk.CTkLabel(grid, text=d, width=cell,
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
                 text_color="gray55",
@@ -584,7 +584,7 @@ class ProgressDashboard(ctk.CTkFrame):
         self._spinner_label.pack(side="left", padx=(0, 8))
         self._phase_label = ctk.CTkLabel(
             phase_inner,
-            text="Aguardando início...",
+            text="Waiting to start...",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             text_color=("gray40", "gray60"),
         )
@@ -610,8 +610,8 @@ class ProgressDashboard(ctk.CTkFrame):
         stats_frame.pack(fill="x", pady=(0, 6))
         self._stat_labels: dict[str, ctk.CTkLabel] = {}
         for key, icon, text in [
-            ("success", "✅", "Sucesso"), ("error", "❌", "Erros"),
-            ("skipped", "⏭", "Ignorados"), ("pending", "⏳", "Pendentes"),
+            ("success", "✅", "Success"), ("error", "❌", "Errors"),
+            ("skipped", "⏭", "Skipped"), ("pending", "⏳", "Pending"),
         ]:
             badge = ctk.CTkFrame(stats_frame, corner_radius=8, fg_color=("gray88", "gray20"))
             badge.pack(side="left", expand=True, fill="x", padx=2)
@@ -631,14 +631,14 @@ class ProgressDashboard(ctk.CTkFrame):
         self._cards_frame = ctk.CTkScrollableFrame(self, corner_radius=8, fg_color=("gray92", "gray14"))
         self._cards_frame.pack(fill="both", expand=True, pady=(0, 6))
         self._empty_label = ctk.CTkLabel(
-            self._cards_frame, text="Nenhum item processado ainda.",
+            self._cards_frame, text="No items processed yet.",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12), text_color=("gray50", "gray50"),
         )
         self._empty_label.pack(pady=20)
 
         # Collapsible log
         self._log_toggle = ctk.CTkButton(
-            self, text="▶  Mostrar Logs", height=26, corner_radius=6,
+            self, text="▶  Show Logs", height=26, corner_radius=6,
             fg_color=("gray80", "gray25"), hover_color=("gray70", "gray35"),
             text_color=("gray30", "gray70"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
@@ -662,7 +662,7 @@ class ProgressDashboard(ctk.CTkFrame):
                 w.destroy()
             if total == 0:
                 self._empty_label = ctk.CTkLabel(
-                    self._cards_frame, text="Nenhum item encontrado.",
+                    self._cards_frame, text="No items found.",
                     font=ctk.CTkFont(family=_FONT_FAMILY, size=12), text_color=("gray50", "gray50"),
                 )
                 self._empty_label.pack(pady=20)
@@ -671,7 +671,7 @@ class ProgressDashboard(ctk.CTkFrame):
             for k in self._stat_labels:
                 self._stat_labels[k].configure(text="0")
             self._stat_labels["pending"].configure(text=str(total))
-            self._phase_label.configure(text="Iniciando...", text_color=("#1565c0", "#64b5f6"))
+            self._phase_label.configure(text="Starting...", text_color=("#1565c0", "#64b5f6"))
             self._log_box.configure(state="normal")
             self._log_box.delete("1.0", "end")
             self._log_box.configure(state="disabled")
@@ -685,7 +685,7 @@ class ProgressDashboard(ctk.CTkFrame):
         def _do():
             self._success_count += 1
             self._done += 1
-            self._add_card(name, "success", detail or "Processado")
+            self._add_card(name, "success", detail or "Processed")
             self._refresh()
         self.after(0, _do)
 
@@ -701,7 +701,7 @@ class ProgressDashboard(ctk.CTkFrame):
         def _do():
             self._skipped_count += 1
             self._done += 1
-            self._add_card(name, "skipped", detail or "Ignorado")
+            self._add_card(name, "skipped", detail or "Skipped")
             self._refresh()
         self.after(0, _do)
 
@@ -710,10 +710,10 @@ class ProgressDashboard(ctk.CTkFrame):
             self._running = False
             self._stop_spinner()
             if self._error_count > 0:
-                self._phase_label.configure(text=f"Concluído com {self._error_count} erro(s)", text_color=("#c62828", "#ef5350"))
+                self._phase_label.configure(text=f"Completed with {self._error_count} error(s)", text_color=("#c62828", "#ef5350"))
                 self._spinner_label.configure(text="⚠️")
             else:
-                self._phase_label.configure(text="Concluído com sucesso!", text_color=("#2e7d32", "#66bb6a"))
+                self._phase_label.configure(text="Completed successfully!", text_color=("#2e7d32", "#66bb6a"))
                 self._spinner_label.configure(text="✅")
             self._progress_bar.set(1)
         self.after(0, _do)
@@ -739,6 +739,7 @@ class ProgressDashboard(ctk.CTkFrame):
         if detail:
             ctk.CTkLabel(card, text=detail, anchor="e", font=ctk.CTkFont(family=_FONT_FAMILY, size=10), text_color=("gray45", "gray55")).pack(side="right", padx=(4, 8), fill="x", expand=True)
         self.after(10, lambda: self._cards_frame._parent_canvas.yview_moveto(1.0))
+
     def _refresh(self) -> None:
         if self._total > 0:
             pct = self._done / self._total
@@ -769,20 +770,20 @@ class ProgressDashboard(ctk.CTkFrame):
     def _toggle_log(self) -> None:
         if self._log_visible:
             self._log_box.pack_forget()
-            self._log_toggle.configure(text="▶  Mostrar Logs")
+            self._log_toggle.configure(text="▶  Show Logs")
             self._log_visible = False
         else:
             self._log_box.pack(fill="x", pady=(4, 0))
-            self._log_toggle.configure(text="▼  Ocultar Logs")
+            self._log_toggle.configure(text="▼  Hide Logs")
             self._log_visible = True
 
 # ── Main application ─────────────────────────────────────────────────
 class DSNOApp(ctk.CTk):
     """Main application window."""
 
-    _TAB_PROC     = "⚙  Processador"
-    _TAB_DOWNLOAD = "📥  EBS Download"
-    _TAB_UPLOAD   = "📤  EBS Upload"
+    _TAB_PROC     = "Processor"
+    _TAB_DOWNLOAD = "EBS Download"
+    _TAB_UPLOAD   = "EBS Upload"
 
     def __init__(self) -> None:
         super().__init__()
@@ -836,13 +837,13 @@ class DSNOApp(ctk.CTk):
 
         ctk.CTkLabel(
             header_inner,
-            text="⚙  DSNO Processor",
+            text="DSNO Processor",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=22, weight="bold"),
         ).pack(side="left", expand=True)
 
         ctk.CTkButton(
             header_inner,
-            text="⚙  Configurações",
+            text="Settings",
             width=140,
             height=32,
             corner_radius=8,
@@ -877,7 +878,7 @@ class DSNOApp(ctk.CTk):
         self._build_tab_upload()
 
     # ──────────────────────────────────────────────────────────────
-    # Tab: Processador
+    # Tab: Processor
     # ──────────────────────────────────────────────────────────────
 
     def _build_tab_processor(
@@ -931,7 +932,7 @@ class DSNOApp(ctk.CTk):
         # Run button
         self.run_btn = ctk.CTkButton(
             tab,
-            text="▶  Start Processing",
+            text="Start Processing",
             height=40,
             corner_radius=10,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=14, weight="bold"),
@@ -947,8 +948,8 @@ class DSNOApp(ctk.CTk):
     # Tab: EBS Download
     # ──────────────────────────────────────────────────────────────
 
-    _DL_TAB_CONFIG   = "⚙  Configuração"
-    _DL_TAB_PROGRESS = "📊  Andamento"
+    _DL_TAB_CONFIG   = "Configuration"
+    _DL_TAB_PROGRESS = "Progress"
 
     def _build_tab_download(self) -> None:
         cfg = self._app_config
@@ -966,7 +967,7 @@ class DSNOApp(ctk.CTk):
         inner_tab.add(self._DL_TAB_PROGRESS)
         self._dl_tabview = inner_tab
 
-        # ── Configuração sub-tab ──────────────────────────────────
+        # ── Configuration sub-tab ──────────────────────────────────
         tab = inner_tab.tab(self._DL_TAB_CONFIG)
 
         form = ctk.CTkScrollableFrame(tab, corner_radius=8, fg_color="transparent")
@@ -990,31 +991,31 @@ class DSNOApp(ctk.CTk):
             e.grid(row=r, column=1, sticky="ew", pady=4, padx=(0, 6))
             return var, e
 
-        # Período
-        ctk.CTkLabel(form, text="Período", anchor="w",
+        # Period
+        ctk.CTkLabel(form, text="Period", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
         row += 1
-        _lbl("Data Início:", row)
+        _lbl("Start Date:", row)
         self.dl_date_start = DateTimeInput(form)
         self.dl_date_start.grid(row=row, column=1, columnspan=2, sticky="w", pady=4, padx=(0, 6))
         row += 1
-        _lbl("Data Fim:", row)
+        _lbl("End Date:", row)
         self.dl_date_end = DateTimeInput(form)
         self.dl_date_end.grid(row=row, column=1, columnspan=2, sticky="w", pady=4, padx=(0, 6))
         row += 1
-        _lbl("Filtro de Status:", row)
+        _lbl("Status Filter:", row)
         self.dl_status_filter_var, _e = _ent(row, "")
-        add_placeholder(_e, "Processed, Downloaded, <vazio>"); row += 1
+        add_placeholder(_e, "Processed, Downloaded, <empty>"); row += 1
 
-        # Arquivos
-        ctk.CTkLabel(form, text="Arquivos", anchor="w",
+        # Files
+        ctk.CTkLabel(form, text="Files", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
-        _lbl("Dir. Download:", row)
+        _lbl("Download Dir:", row)
         self.dl_dir_var, _ = _ent(row, str(cfg.download_dir) if cfg else "")
         ctk.CTkButton(form, text="Browse", width=70,
             command=self._browse_dl_dir,
@@ -1027,8 +1028,8 @@ class DSNOApp(ctk.CTk):
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
         ).grid(row=row, column=2, padx=(4, 6), pady=4); row += 1
 
-        # Conexão
-        ctk.CTkLabel(form, text="Conexão", anchor="w",
+        # Connection
+        ctk.CTkLabel(form, text="Connection", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
@@ -1036,33 +1037,33 @@ class DSNOApp(ctk.CTk):
         _lbl("EBS URL:", row)
         self.dl_url_var, _ = _ent(row, cfg.ebs_download_url if cfg else ""); row += 1
 
-        # Colunas
-        ctk.CTkLabel(form, text="Colunas", anchor="w",
+        # Columns
+        ctk.CTkLabel(form, text="Columns", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
-        _lbl("Coluna DSNO:", row)
+        _lbl("DSNO Column:", row)
         self.dl_dsno_col_var, _ = _ent(row, cfg.ebs_dsno_col if cfg else "ARGUMENT2"); row += 1
-        _lbl("Coluna Data:", row)
+        _lbl("Date Column:", row)
         self.dl_date_col_var, _ = _ent(row, cfg.ebs_date_col if cfg else "CREATION_DATE"); row += 1
-        _lbl("Coluna Status:", row)
+        _lbl("Status Column:", row)
         self.dl_status_col_var, _ = _ent(row, cfg.ebs_status_col if cfg else "STATUS"); row += 1
 
-        # Pastas
-        ctk.CTkLabel(form, text="Pastas", anchor="w",
+        # Folders
+        ctk.CTkLabel(form, text="Folders", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
-        indices_str = ",".join(str(x) for x in (cfg.ebs_pastas_indices if cfg else [92, 95, 101]))
-        _lbl("Índices de Pasta:", row)
-        self.dl_pastas_var, _ = _ent(row, indices_str); row += 1
+        indices_str = ",".join(str(x) for x in (cfg.ebs_folder_indices if cfg else [92, 95, 101]))
+        _lbl("Folder Indices:", row)
+        self.dl_folders_var, _ = _ent(row, indices_str); row += 1
 
-        # Botão iniciar
+        # Start button
         self.dl_start_btn = ctk.CTkButton(
             tab,
-            text="▶  Iniciar Download",
+            text="Start Download",
             height=40, corner_radius=10,
             fg_color=("#2e7d32", "#1b5e20"),
             hover_color=("#388e3c", "#2e7d32"),
@@ -1071,7 +1072,7 @@ class DSNOApp(ctk.CTk):
         )
         self.dl_start_btn.pack(fill="x", pady=(0, 6))
 
-        # ── Andamento sub-tab ─────────────────────────────────────
+        # ── Progress sub-tab ─────────────────────────────────────
         prog_tab = inner_tab.tab(self._DL_TAB_PROGRESS)
         self.dl_dashboard = ProgressDashboard(prog_tab)
         self.dl_dashboard.pack(fill="both", expand=True, pady=4)
@@ -1080,8 +1081,8 @@ class DSNOApp(ctk.CTk):
     # Tab: EBS Upload
     # ──────────────────────────────────────────────────────────────
 
-    _UL_TAB_CONFIG   = "⚙  Configuração"
-    _UL_TAB_PROGRESS = "📊  Andamento"
+    _UL_TAB_CONFIG   = "Configuration"
+    _UL_TAB_PROGRESS = "Progress"
 
     def _build_tab_upload(self) -> None:
         cfg = self._app_config
@@ -1099,7 +1100,7 @@ class DSNOApp(ctk.CTk):
         inner_tab.add(self._UL_TAB_PROGRESS)
         self._ul_tabview = inner_tab
 
-        # ── Configuração sub-tab ──────────────────────────────────
+        # ── Configuration sub-tab ──────────────────────────────────
         tab = inner_tab.tab(self._UL_TAB_CONFIG)
 
         form = ctk.CTkFrame(tab, fg_color="transparent")
@@ -1121,8 +1122,8 @@ class DSNOApp(ctk.CTk):
             ).grid(row=r, column=1, sticky="ew", pady=5, padx=(0, 6))
             return var
 
-        # Conexão
-        ctk.CTkLabel(form, text="Conexão", anchor="w",
+        # Connection
+        ctk.CTkLabel(form, text="Connection", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
@@ -1130,32 +1131,32 @@ class DSNOApp(ctk.CTk):
         _lbl("EBS URL:", row)
         self.ul_url_var = _ent(row, cfg.ebs_upload_url if cfg else ""); row += 1
 
-        # Arquivos
-        ctk.CTkLabel(form, text="Arquivos", anchor="w",
+        # Files
+        ctk.CTkLabel(form, text="Files", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
-        _lbl("Dir. Upload:", row)
+        _lbl("Upload Dir:", row)
         self.ul_dir_var = _ent(row, str(cfg.upload_dir) if cfg else "")
         ctk.CTkButton(form, text="Browse", width=70,
             command=self._browse_ul_dir,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
         ).grid(row=row, column=2, padx=(4, 6), pady=5); row += 1
 
-        # Pastas
-        ctk.CTkLabel(form, text="Pastas", anchor="w",
+        # Folders
+        ctk.CTkLabel(form, text="Folders", anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
-        _lbl("Índice da Pasta:", row)
-        self.ul_pasta_var = _ent(row, str(cfg.ebs_upload_pasta_indice) if cfg else "92"); row += 1
+        _lbl("Folder Index:", row)
+        self.ul_folder_var = _ent(row, str(cfg.ebs_upload_folder_index) if cfg else "92"); row += 1
 
-        # Botão iniciar
+        # Start button
         self.ul_start_btn = ctk.CTkButton(
             tab,
-            text="▶  Iniciar Upload",
+            text="Start Upload",
             height=40, corner_radius=10,
             fg_color=("#e65100", "#bf360c"),
             hover_color=("#f57c00", "#e65100"),
@@ -1164,13 +1165,13 @@ class DSNOApp(ctk.CTk):
         )
         self.ul_start_btn.pack(fill="x", pady=(0, 6))
 
-        # ── Andamento sub-tab ─────────────────────────────────────
+        # ── Progress sub-tab ─────────────────────────────────────
         prog_tab = inner_tab.tab(self._UL_TAB_PROGRESS)
         self.ul_dashboard = ProgressDashboard(prog_tab)
         self.ul_dashboard.pack(fill="both", expand=True, pady=4)
 
     # ──────────────────────────────────────────────────────────────
-    # Browse dialogs — Processador
+    # Browse dialogs — Processor
     # ──────────────────────────────────────────────────────────────
 
     def _browse_customer(self) -> None:
@@ -1234,7 +1235,7 @@ class DSNOApp(ctk.CTk):
             self.ul_dir_var.set(folder)
 
     # ──────────────────────────────────────────────────────────────
-    # Processing — Processador tab
+    # Processing — Processor tab
     # ──────────────────────────────────────────────────────────────
 
     def _start_processing(self) -> None:
@@ -1271,47 +1272,20 @@ class DSNOApp(ctk.CTk):
             )
 
             summary = (
-                f"Processamento concluído: {result.success}/{result.total} com sucesso."
+                f"Processing complete: {result.success}/{result.total} successful."
             )
             logging.info(summary)
             if result.failed > 0:
-                messagebox.showinfo("Concluído", f"{summary}\n{result.failed} erro(s).")
+                messagebox.showinfo("Complete", f"{summary}\n{result.failed} error(s).")
             else:
-                messagebox.showinfo("Sucesso", summary)
+                messagebox.showinfo("Success", summary)
         except Exception as exc:
             logging.error("Error during processing: %s", exc)
-            self.dashboard.set_phase(f"Erro: {exc}")
+            self.dashboard.set_phase(f"Error: {exc}")
             self.dashboard.finish()
-            messagebox.showerror("Erro", str(exc))
+            messagebox.showerror("Error", str(exc))
         finally:
             self.run_btn.configure(state="normal")
-
-
-    # ──────────────────────────────────────────────────────────────
-    # Browse dialogs — EBS Download
-    # ──────────────────────────────────────────────────────────────
-
-    def _browse_dl_sheet(self) -> None:
-        path = filedialog.askopenfilename(
-            title="Select Customer Sheet",
-            filetypes=[("Excel Files", "*.xlsx *.xls")],
-        )
-        if path:
-            self.dl_sheet_var.set(path)
-
-    def _browse_dl_dir(self) -> None:
-        folder = filedialog.askdirectory(title="Select Download Directory")
-        if folder:
-            self.dl_dir_var.set(folder)
-
-    # ──────────────────────────────────────────────────────────────
-    # Browse dialogs — EBS Upload
-    # ──────────────────────────────────────────────────────────────
-
-    def _browse_ul_dir(self) -> None:
-        folder = filedialog.askdirectory(title="Select Upload Directory")
-        if folder:
-            self.ul_dir_var.set(folder)
 
     # ──────────────────────────────────────────────────────────────
     # Processing — EBS Download tab
@@ -1325,9 +1299,9 @@ class DSNOApp(ctk.CTk):
         logging.getLogger("dsno_processor.ebs_download").addHandler(self._dl_handler)
 
         try:
-            pastas = [int(x.strip()) for x in self.dl_pastas_var.get().split(",") if x.strip()]
+            folder_indices = [int(x.strip()) for x in self.dl_folders_var.get().split(",") if x.strip()]
         except ValueError:
-            pastas = [92, 95, 101]
+            folder_indices = [92, 95, 101]
 
         cfg = self._app_config
         config = DownloadConfig(
@@ -1335,7 +1309,7 @@ class DSNOApp(ctk.CTk):
             customer_sheet_path=self.dl_sheet_var.get(),
             download_dir=self.dl_dir_var.get(),
             email=cfg.ebs_email if cfg else "",
-            senha=cfg.ebs_password if cfg else "",
+            password=cfg.ebs_password if cfg else "",
             dsno_col=self.dl_dsno_col_var.get(),
             date_col=self.dl_date_col_var.get(),
             status_col=self.dl_status_col_var.get(),
@@ -1343,7 +1317,7 @@ class DSNOApp(ctk.CTk):
             date_end=self.dl_date_end.get(),
             status_filter=self.dl_status_filter_var.get(),
             headless=cfg.ebs_headless if cfg else False,
-            pastas_indices=pastas,
+            folder_indices=folder_indices,
         )
 
         def _cb(event, data):
@@ -1359,15 +1333,15 @@ class DSNOApp(ctk.CTk):
     def _download_thread(self, config: DownloadConfig, progress_cb) -> None:
         try:
             result = run_download(config, progress_callback=progress_cb)
-            total = result["sucesso"] + result["ignorados"] + len(result["falhas"])
-            summary = f"Download concluído: {result['sucesso']}/{total - result['ignorados']} com sucesso."
+            total = result["success"] + result["skipped"] + len(result["failures"])
+            summary = f"Download complete: {result['success']}/{total - result['skipped']} successful."
             logging.getLogger("dsno_processor.ebs_download").info(summary)
             messagebox.showinfo("Download", summary)
         except Exception as exc:
-            logging.getLogger("dsno_processor.ebs_download").error("Erro: %s", exc)
-            self.dl_dashboard.set_phase(f"Erro: {exc}")
+            logging.getLogger("dsno_processor.ebs_download").error("Error: %s", exc)
+            self.dl_dashboard.set_phase(f"Error: {exc}")
             self.dl_dashboard.finish()
-            messagebox.showerror("Erro", str(exc))
+            messagebox.showerror("Error", str(exc))
         finally:
             self.dl_start_btn.configure(state="normal")
             if self._dl_handler:
@@ -1385,17 +1359,17 @@ class DSNOApp(ctk.CTk):
         logging.getLogger("dsno_processor.ebs_upload").addHandler(self._ul_handler)
 
         try:
-            pasta_idx = int(self.ul_pasta_var.get())
+            folder_idx = int(self.ul_folder_var.get())
         except ValueError:
-            pasta_idx = 92
+            folder_idx = 92
 
         cfg = self._app_config
         config = UploadConfig(
             ebs_url=self.ul_url_var.get(),
             upload_dir=self.ul_dir_var.get(),
             email=cfg.ebs_email if cfg else "",
-            senha=cfg.ebs_password if cfg else "",
-            pasta_indice=pasta_idx,
+            password=cfg.ebs_password if cfg else "",
+            folder_index=folder_idx,
             headless=cfg.ebs_headless if cfg else False,
         )
 
@@ -1412,15 +1386,15 @@ class DSNOApp(ctk.CTk):
     def _upload_thread(self, config: UploadConfig, progress_cb) -> None:
         try:
             result = run_upload(config, progress_callback=progress_cb)
-            total = result["sucesso"] + result["ignorados"] + len(result["falhas"])
-            summary = f"Upload concluído: {result['sucesso']}/{total} com sucesso."
+            total = result["success"] + result["skipped"] + len(result["failures"])
+            summary = f"Upload complete: {result['success']}/{total} successful."
             logging.getLogger("dsno_processor.ebs_upload").info(summary)
             messagebox.showinfo("Upload", summary)
         except Exception as exc:
-            logging.getLogger("dsno_processor.ebs_upload").error("Erro: %s", exc)
-            self.ul_dashboard.set_phase(f"Erro: {exc}")
+            logging.getLogger("dsno_processor.ebs_upload").error("Error: %s", exc)
+            self.ul_dashboard.set_phase(f"Error: {exc}")
             self.ul_dashboard.finish()
-            messagebox.showerror("Erro", str(exc))
+            messagebox.showerror("Error", str(exc))
         finally:
             self.ul_start_btn.configure(state="normal")
             if self._ul_handler:
@@ -1444,7 +1418,7 @@ class DSNOApp(ctk.CTk):
         self.control_row.set(str(cfg.control_sheet))
         self.dsno_row.set(str(cfg.dsno_directory))
         self._customer_pre_path = str(cfg.customer_sheet_pre_path)
-        logging.info("Configurações recarregadas com sucesso.")
+        logging.info("Settings reloaded successfully.")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1455,21 +1429,21 @@ class SettingsWindow(ctk.CTkToplevel):
     """Window to view and edit the persistent config.toml settings.
 
     Uses a tabbed layout so each config domain (Paths, Processor, EBS,
-    Columns, Pastas, Credentials) gets its own focused view.
+    Columns, Folders, Credentials) gets its own focused view.
     """
 
     _TAB_NAMES = [
-        "📂 Caminhos",
-        "⚙ Processador",
-        "🌐 EBS",
-        "📊 Colunas",
-        "📁 Pastas",
-        "🔑 Credenciais",
+        "Paths",
+        "Processor",
+        "EBS",
+        "Columns",
+        "Folders",
+        "Credentials",
     ]
 
     def __init__(self, master, on_save=None) -> None:
         super().__init__(master)
-        self.title("⚙  Configurações")
+        self.title("Settings")
         self.geometry("800x620")
         self.minsize(700, 520)
         self._on_save = on_save
@@ -1498,12 +1472,12 @@ class SettingsWindow(ctk.CTkToplevel):
         header.pack(fill="x", padx=pad, pady=(pad, 8))
         ctk.CTkLabel(
             header,
-            text="⚙  Configurações do Programa",
+            text="Application Settings",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=20, weight="bold"),
         ).pack(pady=(12, 2))
         ctk.CTkLabel(
             header,
-            text="Edite as configurações permanentes salvas em config.toml.",
+            text="Edit the persistent settings saved in config.toml.",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             text_color="gray60",
         ).pack(pady=(0, 12))
@@ -1525,7 +1499,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._build_tab_processor(cfg)
         self._build_tab_ebs(cfg)
         self._build_tab_columns(cfg)
-        self._build_tab_pastas(cfg)
+        self._build_tab_folders(cfg)
         self._build_tab_credentials(cfg)
 
         # ── Buttons ───────────────────────────────────────────────
@@ -1534,7 +1508,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            text="✖  Cancelar",
+            text="✖  Cancel",
             height=38,
             corner_radius=10,
             fg_color=("gray70", "gray30"),
@@ -1545,7 +1519,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            text="💾  Salvar",
+            text="Save",
             height=38,
             corner_radius=10,
             fg_color=("#2e7d32", "#1b5e20"),
@@ -1564,102 +1538,102 @@ class SettingsWindow(ctk.CTkToplevel):
         self.focus_force()
 
     def _build_tab_paths(self, cfg) -> None:
-        tab = self._tabview.tab("📂 Caminhos")
+        tab = self._tabview.tab("Paths")
         form = self._make_form(tab)
 
         self._tab_hint(
-            form, "Diretórios e arquivos utilizados pelo processador DSNO."
+            form, "Directories and files used by the DSNO processor."
         )
 
         self._add_path_field(
-            form, 1, "Diretório DSNO:", "dsno_directory",
+            form, 1, "DSNO Directory:", "dsno_directory",
             str(cfg.paths.dsno_directory) if cfg else "",
             mode="dir",
-            hint="Pasta com os arquivos .txt de DSNO.",
+            hint="Folder containing the DSNO .txt files.",
         )
         self._add_path_field(
             form, 3, "Control Sheet:", "control_sheet",
             str(cfg.paths.control_sheet) if cfg else "",
             mode="file",
             filetypes=[("Excel", "*.xlsx *.xls")],
-            hint="Planilha Control ASN Navistar.",
+            hint="Control ASN Navistar spreadsheet.",
         )
         self._add_path_field(
             form, 5, "Customer Sheet:", "customer_sheet",
             str(cfg.paths.customer_sheet) if cfg else "",
             mode="file",
             filetypes=[("Excel", "*.xlsx *.xls")],
-            hint="Planilha do cliente (opcional).",
+            hint="Customer spreadsheet (optional).",
         )
         self._add_path_field(
             form, 7, "Customer Pre-Path:", "customer_sheet_pre_path",
             str(cfg.paths.customer_sheet_pre_path) if cfg else "",
             mode="dir",
-            hint="Pasta padrão para busca da Customer Sheet.",
+            hint="Default folder for browsing customer sheets.",
         )
 
     def _build_tab_processor(self, cfg) -> None:
-        tab = self._tabview.tab("⚙ Processador")
+        tab = self._tabview.tab("Processor")
         form = self._make_form(tab)
 
         self._tab_hint(
             form,
-            "Configurações que controlam o comportamento do processamento.",
+            "Settings that control the processing behaviour.",
         )
 
         self._add_text_field(
-            form, 1, "Status Válidos:", "processor_valid_statuses",
+            form, 1, "Valid Statuses:", "processor_valid_statuses",
             ", ".join(
                 s.capitalize()
                 for s in cfg.processor.valid_statuses
             )
             if cfg
             else "Downloaded",
-            hint="Separe múltiplos valores por vírgula (ex: Downloaded, New).",
+            hint="Separate multiple values with commas (e.g. Downloaded, New).",
         )
 
     def _build_tab_ebs(self, cfg) -> None:
-        tab = self._tabview.tab("🌐 EBS")
+        tab = self._tabview.tab("EBS")
         form = self._make_form(tab)
 
         self._tab_hint(
-            form, "URLs e diretórios do Oracle EBS para download e upload."
+            form, "Oracle EBS URLs and directories for download and upload."
         )
 
         self._add_text_field(
             form, 1, "Download URL:", "ebs_download_url",
             cfg.ebs.download_url if cfg else "",
-            hint="URL completa da página de download do EBS.",
+            hint="Full URL of the EBS download page.",
         )
         self._add_text_field(
             form, 3, "Upload URL:", "ebs_upload_url",
             cfg.ebs.upload_url if cfg else "",
-            hint="URL completa da página de upload do EBS.",
+            hint="Full URL of the EBS upload page.",
         )
         self._add_path_field(
             form, 5, "Download Dir:", "download_dir",
             str(cfg.ebs.download_dir) if cfg else "",
             mode="dir",
-            hint="Pasta onde os arquivos baixados serão salvos.",
+            hint="Folder where downloaded files will be saved.",
         )
         self._add_path_field(
             form, 7, "Upload Dir:", "upload_dir",
             str(cfg.ebs.upload_dir) if cfg else "",
             mode="dir",
-            hint="Pasta com os arquivos processados para upload.",
+            hint="Folder containing processed files for upload.",
         )
 
         # Headless mode toggle
         row = 9
         self._hint_label(
             form,
-            "Quando ativado, o navegador roda em segundo plano (invisível).",
+            "When enabled, the browser runs in the background (invisible).",
             row,
         )
         row += 1
 
         ctk.CTkLabel(
-            form, text="Modo Headless:", anchor="w", width=150,
+            form, text="Headless Mode:", anchor="w", width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
@@ -1668,7 +1642,7 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         ctk.CTkSwitch(
             form,
-            text="Navegador em segundo plano",
+            text="Browser in background",
             variable=self._headless_var,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             onvalue=True,
@@ -1676,77 +1650,77 @@ class SettingsWindow(ctk.CTkToplevel):
         ).grid(row=row, column=1, sticky="w", pady=3, columnspan=2)
 
     def _build_tab_columns(self, cfg) -> None:
-        tab = self._tabview.tab("📊 Colunas")
+        tab = self._tabview.tab("Columns")
         form = self._make_form(tab)
 
         self._tab_hint(
             form,
-            "Nomes das colunas usadas nas planilhas do EBS.",
+            "Column names used in the EBS spreadsheets.",
         )
 
         self._add_text_field(
-            form, 1, "Coluna DSNO:", "ebs_col_dsno",
+            form, 1, "DSNO Column:", "ebs_col_dsno",
             cfg.ebs.columns.dsno if cfg else "ARGUMENT2",
-            hint="Nome da coluna que contém o identificador DSNO.",
+            hint="Name of the column containing the DSNO identifier.",
         )
         self._add_text_field(
-            form, 3, "Coluna Data:", "ebs_col_date",
+            form, 3, "Date Column:", "ebs_col_date",
             cfg.ebs.columns.date if cfg else "CREATION_DATE",
-            hint="Nome da coluna de data de criação.",
+            hint="Name of the creation date column.",
         )
         self._add_text_field(
-            form, 5, "Coluna Status:", "ebs_col_status",
+            form, 5, "Status Column:", "ebs_col_status",
             cfg.ebs.columns.status if cfg else "STATUS",
-            hint="Nome da coluna de status.",
+            hint="Name of the status column.",
         )
 
-    def _build_tab_pastas(self, cfg) -> None:
-        tab = self._tabview.tab("📁 Pastas")
+    def _build_tab_folders(self, cfg) -> None:
+        tab = self._tabview.tab("Folders")
         form = self._make_form(tab)
 
         self._tab_hint(
             form,
-            "Índices de pastas usados pelo EBS para download e upload.",
+            "Folder indices used by EBS for download and upload.",
         )
 
         indices = (
-            ", ".join(str(x) for x in cfg.ebs.pastas.download_indices)
+            ", ".join(str(x) for x in cfg.ebs.folders.download_indices)
             if cfg
             else "92, 95, 101"
         )
         self._add_text_field(
-            form, 1, "Índices Download:", "ebs_pastas_download",
+            form, 1, "Download Indices:", "ebs_folders_download",
             indices,
-            hint="Índices separados por vírgula (ex: 92, 95, 101).",
+            hint="Comma-separated indices (e.g. 92, 95, 101).",
         )
         self._add_text_field(
-            form, 3, "Índice Upload:", "ebs_pasta_upload",
-            str(cfg.ebs.pastas.upload_indice) if cfg else "92",
-            hint="Índice da pasta de upload.",
+            form, 3, "Upload Index:", "ebs_folder_upload",
+            str(cfg.ebs.folders.upload_index) if cfg else "92",
+            hint="Folder index for uploading.",
         )
 
     def _build_tab_credentials(self, cfg) -> None:
-        tab = self._tabview.tab("🔑 Credenciais")
+        tab = self._tabview.tab("Credentials")
         form = self._make_form(tab)
 
         self._tab_hint(
             form,
-            "Credenciais usadas para login automático no Microsoft / EBS.",
+            "Credentials used for automatic Microsoft / EBS login.",
         )
 
         self._add_text_field(
             form, 1, "Email:", "cred_email",
             cfg.credentials.email if cfg else "",
-            hint="Endereço de e-mail corporativo.",
+            hint="Corporate email address.",
         )
 
         # Password with toggle
         row = 3
-        self._hint_label(form, "Senha utilizada no login automático.", row)
+        self._hint_label(form, "Password used for automatic login.", row)
         row += 1
 
         ctk.CTkLabel(
-            form, text="Senha:", anchor="w", width=150,
+            form, text="Password:", anchor="w", width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
@@ -1874,11 +1848,11 @@ class SettingsWindow(ctk.CTkToplevel):
         def _browse():
             if mode == "dir":
                 result = filedialog.askdirectory(
-                    title=f"Selecionar {label.rstrip(':')}"
+                    title=f"Select {label.rstrip(':')}"
                 )
             else:
                 result = filedialog.askopenfilename(
-                    title=f"Selecionar {label.rstrip(':')}",
+                    title=f"Select {label.rstrip(':')}",
                     filetypes=filetypes or [],
                 )
             if result:
@@ -1934,18 +1908,18 @@ class SettingsWindow(ctk.CTkToplevel):
         from pathlib import Path as _Path
 
         try:
-            pastas = [
+            folder_indices = [
                 int(x.strip())
-                for x in self._vars["ebs_pastas_download"].get().split(",")
+                for x in self._vars["ebs_folders_download"].get().split(",")
                 if x.strip()
             ]
         except ValueError:
-            pastas = [92, 95, 101]
+            folder_indices = [92, 95, 101]
 
         try:
-            upload_pasta = int(self._vars["ebs_pasta_upload"].get())
+            upload_folder_index = int(self._vars["ebs_folder_upload"].get())
         except ValueError:
-            upload_pasta = 92
+            upload_folder_index = 92
 
         valid_raw = self._vars["processor_valid_statuses"].get()
         valid_statuses = [
@@ -1973,9 +1947,9 @@ class SettingsWindow(ctk.CTkToplevel):
                     date=self._vars["ebs_col_date"].get(),
                     status=self._vars["ebs_col_status"].get(),
                 ),
-                pastas=EbsPastasConfig(
-                    download_indices=pastas,
-                    upload_indice=upload_pasta,
+                folders=EbsFoldersConfig(
+                    download_indices=folder_indices,
+                    upload_index=upload_folder_index,
                 ),
             ),
             credentials=CredentialsConfig(
@@ -1987,16 +1961,16 @@ class SettingsWindow(ctk.CTkToplevel):
         try:
             save_config(new_config)
             messagebox.showinfo(
-                "Configurações",
-                "Configurações salvas com sucesso!\n"
-                "As alterações já estão em vigor.",
+                "Settings",
+                "Settings saved successfully!\n"
+                "Changes are now in effect.",
             )
             if self._on_save:
                 self._on_save()
             self.destroy()
         except Exception as exc:
             messagebox.showerror(
-                "Erro", f"Erro ao salvar configurações:\n{exc}"
+                "Error", f"Error saving settings:\n{exc}"
             )
 
 
