@@ -403,7 +403,6 @@ class DateInput(ctk.CTkFrame):
         if prefill_today:
             self.entry.insert(0, datetime.now().strftime(self._fmt))
 
-        self.entry.bind("<Button-1>", lambda _: self.after(50, self._toggle_popup))
         self.entry.bind("<FocusOut>", self._validate)
 
     # ── Public API ────────────────────────────────────────────────
@@ -1541,7 +1540,9 @@ class SettingsWindow(ctk.CTkToplevel):
     def _bring_to_front(self) -> None:
         """Ensure this toplevel window is visible above the main window."""
         self.lift()
+        self.attributes("-topmost", True)
         self.focus_force()
+        self.after(50, lambda: self.attributes("-topmost", False))
 
     def _build_tab_general(self, cfg) -> None:
         tab = self._tabview.tab(t("settings.tab.general"))
