@@ -10,6 +10,7 @@ from datetime import datetime
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
+from PIL import Image
 
 from dsno_processor import process_dsno
 from dsno_processor.config import (
@@ -566,7 +567,6 @@ class ProgressDashboard(ctk.CTkFrame):
         self._running = False
         self._spinner_idx = 0
         self._spinner_job = None
-        self._log_visible = False
         self._build_ui()
 
     # ── UI construction ──────────────────────────────────────────
@@ -636,22 +636,6 @@ class ProgressDashboard(ctk.CTkFrame):
         )
         self._empty_label.pack(pady=20)
 
-        # Collapsible log
-        self._log_toggle = ctk.CTkButton(
-            self, text="▶  Show Logs", height=26, corner_radius=6,
-            fg_color=("gray80", "gray25"), hover_color=("gray70", "gray35"),
-            text_color=("gray30", "gray70"),
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-            command=self._toggle_log, anchor="w",
-        )
-        self._log_toggle.pack(fill="x")
-        self._log_box = ctk.CTkTextbox(
-            self, state="disabled", wrap="word",
-            font=ctk.CTkFont(family="Consolas", size=11),
-            corner_radius=8, height=150,
-        )
-        # Hidden initially — not packed
-
     # ── Public API (thread-safe via .after) ───────────────────────
     def reset(self, total: int) -> None:
         def _do():
@@ -672,9 +656,6 @@ class ProgressDashboard(ctk.CTkFrame):
                 self._stat_labels[k].configure(text="0")
             self._stat_labels["pending"].configure(text=str(total))
             self._phase_label.configure(text=t("dash.starting"), text_color=("#1565c0", "#64b5f6"))
-            self._log_box.configure(state="normal")
-            self._log_box.delete("1.0", "end")
-            self._log_box.configure(state="disabled")
             self._start_spinner()
         self.after(0, _do)
 
@@ -717,11 +698,6 @@ class ProgressDashboard(ctk.CTkFrame):
                 self._spinner_label.configure(text="✅")
             self._progress_bar.set(1)
         self.after(0, _do)
-
-    def get_log_handler(self) -> logging.Handler:
-        handler = _DashboardLogHandler(self._log_box)
-        handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-        return handler
 
     # ── Internal ──────────────────────────────────────────────────
     def _add_card(self, name: str, status: str, detail: str = "") -> None:
@@ -767,15 +743,31 @@ class ProgressDashboard(ctk.CTkFrame):
         self._spinner_idx += 1
         self._spinner_job = self.after(100, self._tick_spinner)
 
-    def _toggle_log(self) -> None:
-        if self._log_visible:
-            self._log_box.pack_forget()
-            self._log_toggle.configure(text="▶  Show Logs")
-            self._log_visible = False
-        else:
-            self._log_box.pack(fill="x", pady=(4, 0))
-            self._log_toggle.configure(text="▼  Hide Logs")
-            self._log_visible = True
+class LogWindow(ctk.CTkToplevel):
+    def __init__(self, master) -> None:
+        super().__init__(master)
+        self.title("Application Log")
+        self.geometry("600x400")
+
+        self.textbox = ctk.CTkTextbox(
+            self, state="disabled", wrap="word",
+            font=ctk.CTkFont(family="Consolas", size=11),
+            corner_radius=8
+        )
+        self.textbox.pack(fill="both", expand=True, padx=4, pady=4)
+        
+        self.protocol("WM_DELETE_WINDOW", self.hide)
+        self.withdraw()
+    
+    def hide(self) -> None:
+        self.withdraw()
+        
+    def show(self) -> None:
+        self.deiconify()
+        self.lift()
+        self.attributes("-topmost", True)
+        self.focus_force()
+        self.after(50, lambda: self.attributes("-topmost", False))
 
 # ── Main application ─────────────────────────────────────────────────
 class DSNOApp(ctk.CTk):
@@ -799,16 +791,26 @@ class DSNOApp(ctk.CTk):
         self._TAB_UPLOAD   = t("tab.upload")
 
         self.title(t("app.title"))
-        self.geometry("900x720")
-        self.minsize(760, 580)
+        
+        # Center the window on the screen
+        appResolution = "1270x720"
+        x = (self.winfo_screenwidth() // 2) - (int(appResolution.split("x")[0]) // 2)
+        y = (self.winfo_screenheight() // 2) - (int(appResolution.split("x")[1]) // 2)
+        self.geometry(f"{appResolution}+{x}+{y}")
+        
+        self.minsize(640, 480)
 
         default_customer = str(cfg.customer_sheet) if cfg else ""
         default_control  = str(cfg.control_sheet)  if cfg else ""
         default_dsno_dir = str(cfg.dsno_directory)  if cfg else ""
         self._customer_pre_path = str(cfg.customer_sheet_pre_path) if cfg else ""
 
-        self._dl_handler: _DashboardLogHandler | None = None
-        self._ul_handler: _DashboardLogHandler | None = None
+        self._dl_handler = None
+        self._ul_handler = None
+
+        self.log_window = LogWindow(self)
+        self.log_handler = _DashboardLogHandler(self.log_window.textbox)
+        self.log_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
 
         # ── Build UI ─────────────────────────────────────────────
         self._create_widgets(default_customer, default_control, default_dsno_dir)
@@ -819,11 +821,18 @@ class DSNOApp(ctk.CTk):
     # ──────────────────────────────────────────────────────────────
 
     def _setup_logging(self) -> None:
-        handler = self.dashboard.get_log_handler()
         root_logger = logging.getLogger()
-        root_logger.addHandler(handler)
+        root_logger.addHandler(self.log_handler)
         root_logger.setLevel(logging.INFO)
+        
+    def _show_log_window(self) -> None:
+        self.log_window.show()
 
+    def _clear_log(self) -> None:
+        self.log_window.textbox.configure(state="normal")
+        self.log_window.textbox.delete("1.0", "end")
+        self.log_window.textbox.configure(state="disabled")
+    
     def _create_widgets(
         self,
         default_customer: str,
@@ -831,6 +840,36 @@ class DSNOApp(ctk.CTk):
         default_dsno_dir: str,
     ) -> None:
         pad = 16
+        
+        # Frame do rodapé
+        footer_frame = ctk.CTkFrame(self, fg_color="transparent", height=30)
+        footer_frame.pack(side="bottom", fill="x", padx=pad, pady=(0, 8))
+
+        # Botão de log (esquerda)
+        log_icon = ctk.CTkImage(
+            light_image=Image.open("assets/icons/bug_light.png"),
+            dark_image=Image.open("assets/icons/bug_dark.png"),
+            size=(15, 15)
+        )
+
+        ctk.CTkButton(
+            footer_frame,
+            text="",
+            image=log_icon,
+            width=30,
+            height=30,
+            corner_radius=6,
+            fg_color="transparent",
+            command=self._show_log_window,
+        ).pack(side="left")
+
+        # Label autor (direita)
+        ctk.CTkLabel(
+            footer_frame,
+            text="Made by Matheus Borges",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=9),
+            text_color="gray60",
+        ).pack(side="right")
 
         # ── Header ───────────────────────────────────────────────
         header = ctk.CTkFrame(self, corner_radius=12)
@@ -838,7 +877,7 @@ class DSNOApp(ctk.CTk):
 
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
         header_inner.pack(fill="x", padx=12, pady=(10, 0))
-
+        
         ctk.CTkLabel(
             header_inner,
             text=t("app.title"),
@@ -872,7 +911,7 @@ class DSNOApp(ctk.CTk):
             segmented_button_selected_color=("#1f6aa5", "#1f6aa5"),
             segmented_button_unselected_hover_color=("gray70", "gray30"),
         )
-        self._tabview.pack(fill="both", expand=True, padx=pad, pady=(0, pad))
+        self._tabview.pack(fill="both", expand=True, padx=pad, pady=(0, 8))
         self._tabview.add(self._TAB_PROC)
         self._tabview.add(self._TAB_DOWNLOAD)
         self._tabview.add(self._TAB_UPLOAD)
@@ -1244,6 +1283,7 @@ class DSNOApp(ctk.CTk):
 
     def _start_processing(self) -> None:
         self.run_btn.configure(state="disabled")
+        self._clear_log()
         thread = threading.Thread(target=self._process_thread, daemon=True)
         thread.start()
 
@@ -1296,9 +1336,7 @@ class DSNOApp(ctk.CTk):
     def _start_download(self) -> None:
         self.dl_start_btn.configure(state="disabled")
         self._dl_tabview.set(self._DL_TAB_PROGRESS)
-
-        self._dl_handler = self.dl_dashboard.get_log_handler()
-        logging.getLogger("dsno_processor.ebs_download").addHandler(self._dl_handler)
+        self._clear_log()
 
         try:
             folder_indices = [int(x.strip()) for x in self.dl_folders_var.get().split(",") if x.strip()]
@@ -1346,8 +1384,6 @@ class DSNOApp(ctk.CTk):
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
             self.dl_start_btn.configure(state="normal")
-            if self._dl_handler:
-                logging.getLogger("dsno_processor.ebs_download").removeHandler(self._dl_handler)
 
     # ──────────────────────────────────────────────────────────────
     # Processing — EBS Upload tab
@@ -1356,9 +1392,7 @@ class DSNOApp(ctk.CTk):
     def _start_upload(self) -> None:
         self.ul_start_btn.configure(state="disabled")
         self._ul_tabview.set(self._UL_TAB_PROGRESS)
-
-        self._ul_handler = self.ul_dashboard.get_log_handler()
-        logging.getLogger("dsno_processor.ebs_upload").addHandler(self._ul_handler)
+        self._clear_log()
 
         try:
             folder_idx = int(self.ul_folder_var.get())
@@ -1399,8 +1433,6 @@ class DSNOApp(ctk.CTk):
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
             self.ul_start_btn.configure(state="normal")
-            if self._ul_handler:
-                logging.getLogger("dsno_processor.ebs_upload").removeHandler(self._ul_handler)
 
     # ──────────────────────────────────────────────────────────────
     # Settings
