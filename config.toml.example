@@ -1,5 +1,8 @@
+[general]
+language = "en"
+
 [paths]
-dsno_directory = "C:\\Users\\ao32v\\OneDrive - Cummins\\Videos\\edi-process"
+dsno_directory = "C:\\Users\\$USER\\edi-process"
 control_sheet = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\Control ASN Navistar.xlsx"
 customer_sheet = "."
 customer_sheet_pre_path = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR"
@@ -12,8 +15,8 @@ valid_statuses = [
 [ebs]
 download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
 upload_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
-download_dir = "C:\\Users\\ao32v\\OneDrive - Cummins\\Videos\\edi-process"
-upload_dir = "Z:\\Documentação\\ORACLE\\EDI\\Editor de DSNO\\DSNO\\processed"
+download_dir = "C:\\Users\\$USER\\edi-process"
+upload_dir = "C:\\Users\\$USER\\edi-process\\Processed"
 headless = true
 
 [ebs.columns]
