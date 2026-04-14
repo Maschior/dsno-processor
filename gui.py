@@ -776,6 +776,16 @@ class DSNOApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
 
+        # Tenta carregar o ícone
+        try:
+            icon_path = os.path.join(os.path.dirname(__file__), "assets", "icons", "favicon.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+            else:
+                logging.error(f"Ícone não encontrado em: {icon_path}")
+        except Exception as e:
+            logging.error(f"Erro ao carregar ícone: {e}")
+
         # ── Load config ──────────────────────────────────────────
         try:
             self._app_config = load_config()
