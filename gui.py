@@ -4,6 +4,7 @@ import calendar
 import logging
 import os
 import re
+import sys
 import threading
 import tkinter as tk
 from datetime import datetime
@@ -11,6 +12,18 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 from PIL import Image
+
+def get_asset_path(relative_path: str) -> str:
+    """Resolve paths for both development and PyInstaller production."""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        # In directory mode, this points to the '_internal' folder.
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # Development mode
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(base_path, relative_path)
 
 from dsno_processor import process_dsno
 from dsno_processor.config import (
@@ -578,8 +591,8 @@ class ProgressDashboard(ctk.CTkFrame):
             self._empty_img = ctk.CTkImage(light_image=Image.new("RGBA", (1, 1), (0,0,0,0)), size=(1, 1))
             self._hourglass_imgs = [
                 ctk.CTkImage(
-                    light_image=Image.open(f"assets/icons/hourglass/hourglass-{p}_light.png"),
-                    dark_image=Image.open(f"assets/icons/hourglass/hourglass-{p}_dark.png"),
+                    light_image=Image.open(get_asset_path(f"assets/icons/hourglass/hourglass-{p}_light.png")),
+                    dark_image=Image.open(get_asset_path(f"assets/icons/hourglass/hourglass-{p}_dark.png")),
                     size=(20, 20)
                 ) for p in ["high", "medium", "low"]
             ]
@@ -642,7 +655,10 @@ class ProgressDashboard(ctk.CTkFrame):
                 from PIL import Image
                 self.cancel_btn = ctk.CTkButton(
                     prog_frame,
-                    image=ctk.CTkImage(light_image=Image.open("assets/icons/cancel_light.png"), dark_image=Image.open("assets/icons/cancel_dark.png")),
+                    image=ctk.CTkImage(
+                        light_image=Image.open(get_asset_path("assets/icons/cancel_light.png")),
+                        dark_image=Image.open(get_asset_path("assets/icons/cancel_dark.png"))
+                    ),
                     text="",
                     height=24, width=24,
                     corner_radius=4, fg_color="transparent", hover_color="#b71c1c",
@@ -945,7 +961,7 @@ class DSNOApp(ctk.CTk):
 
         # Tenta carregar o ícone
         try:
-            icon_path = os.path.join(os.path.dirname(__file__), "assets", "icons", "favicon.ico")
+            icon_path = get_asset_path("assets/icons/favicon.ico")
             if os.path.exists(icon_path):
                 self.iconbitmap(icon_path)
             else:
@@ -1051,8 +1067,8 @@ class DSNOApp(ctk.CTk):
 
         # Botão de log (esquerda)
         log_icon = ctk.CTkImage(
-            light_image=Image.open("assets/icons/bug_light.png"),
-            dark_image=Image.open("assets/icons/bug_dark.png"),
+            light_image=Image.open(get_asset_path("assets/icons/bug_light.png")),
+            dark_image=Image.open(get_asset_path("assets/icons/bug_dark.png")),
             size=(15, 15)
         )
 
@@ -1104,8 +1120,8 @@ class DSNOApp(ctk.CTk):
         # 2. Logo - Placed relative to the title_label without affecting its layout
         try:
             logo_img = ctk.CTkImage(
-                light_image=Image.open("assets/icons/swap_light.png"),
-                dark_image=Image.open("assets/icons/swap_dark.png"),
+                light_image=Image.open(get_asset_path("assets/icons/swap_light.png")),
+                dark_image=Image.open(get_asset_path("assets/icons/swap_dark.png")),
                 size=(28, 28)
             )
             logo_label = ctk.CTkLabel(text_container, image=logo_img, text="")
@@ -1122,8 +1138,8 @@ class DSNOApp(ctk.CTk):
         ctk.CTkButton(
             header_btns,
             image=ctk.CTkImage(
-                light_image=Image.open("assets/icons/settings_light.png"),
-                dark_image=Image.open("assets/icons/settings_dark.png"),
+                light_image=Image.open(get_asset_path("assets/icons/settings_light.png")),
+                dark_image=Image.open(get_asset_path("assets/icons/settings_dark.png")),
                 size=(18, 18)
             ),
             text="",
@@ -1137,8 +1153,8 @@ class DSNOApp(ctk.CTk):
         self._lang_btn = ctk.CTkButton(
             header_btns,
             image=ctk.CTkImage(
-                light_image=Image.open("assets/icons/language_light.png"),
-                dark_image=Image.open("assets/icons/language_dark.png"),
+                light_image=Image.open(get_asset_path("assets/icons/language_light.png")),
+                dark_image=Image.open(get_asset_path("assets/icons/language_dark.png")),
                 size=(18, 18)
             ),
             text="",
@@ -1874,7 +1890,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            image=ctk.CTkImage(light_image=Image.open("assets/icons/cancel_light.png"), dark_image=Image.open("assets/icons/cancel_dark.png")),
+            image=ctk.CTkImage(light_image=Image.open(get_asset_path("assets/icons/cancel_light.png")), dark_image=Image.open(get_asset_path("assets/icons/cancel_dark.png"))),
             text=t("btn.cancel"),
             height=38,
             corner_radius=10,
@@ -1886,7 +1902,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            image=ctk.CTkImage(light_image=Image.open("assets/icons/save_light.png"), dark_image=Image.open("assets/icons/save_dark.png")),
+            image=ctk.CTkImage(light_image=Image.open(get_asset_path("assets/icons/save_light.png")), dark_image=Image.open(get_asset_path("assets/icons/save_dark.png"))),
             text=t("btn.save"),
             height=38,
             corner_radius=10,
@@ -2424,8 +2440,8 @@ class LanguageMenu(ctk.CTkToplevel):
         try:
             from PIL import Image
             check_icon = ctk.CTkImage(
-                light_image=Image.open("assets/icons/check_light.png"),
-                dark_image=Image.open("assets/icons/check_dark.png"),
+                light_image=Image.open(get_asset_path("assets/icons/check_light.png")),
+                dark_image=Image.open(get_asset_path("assets/icons/check_dark.png")),
                 size=(14, 14)
             )
         except Exception:
