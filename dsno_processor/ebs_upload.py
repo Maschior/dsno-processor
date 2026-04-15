@@ -274,6 +274,15 @@ def perform_upload(
 ) -> bool:
     """Upload a single file to EBS."""
     try:
+        # Pre-upload local verification
+        if not os.path.exists(file_path):
+            logger.error("Upload failed: File not found: %s", file_path)
+            return False
+            
+        if os.path.getsize(file_path) == 0:
+            logger.error("Upload aborted: File is empty (0 bytes): %s", file_path)
+            return False
+
         # 1. Select destination folder
         select_el = wait.until(
             EC.presence_of_element_located((By.ID, "pathUpdateble"))

@@ -429,6 +429,12 @@ def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         
+        # Post-download verification
+        if os.path.getsize(file_path) == 0:
+            logger.warning("     Downloaded file is empty (0 bytes). Deleting: %s", save_name)
+            os.remove(file_path)
+            return False
+
         logger.info("     Download successful via requests: %s", save_name)
         return True
         
