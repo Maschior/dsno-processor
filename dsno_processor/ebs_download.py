@@ -269,13 +269,17 @@ def perform_microsoft_login(
         for _ in range(10):
             if cancel_event and cancel_event.is_set():
                 raise CanceledError("Cancelled by user")
-            try:
-                err_el = driver.find_element(By.ID, "passwordError")
-                if err_el.is_displayed():
-                    raise LoginError(f"Login failed: {err_el.text}")
-            except Exception as e:
-                if str(e).startswith("Login failed:"):
-                    raise
+            
+            # Use find_elements to avoid NoSuchElementException if not found
+            err_elements = driver.find_elements(By.ID, "passwordError")
+            if err_elements and err_elements[0].is_displayed():
+                err_msg = err_elements[0].text
+                raise LoginError(f"Login failed: {err_msg}")
+            
+            # If we see signs of redirecting, we can break early
+            if "kmsi" in driver.current_url.lower() or "ebs" in driver.current_url.lower():
+                break
+
             time.sleep(0.5)
     
     except LoginError as e:
@@ -355,6 +359,83 @@ def _file_found(driver):
         return False
 
 
+def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir: str) -> bool:
+    """Download the file using requests by reusing Selenium's cookies and form state."""
+    try:
+        session = requests.Session()
+        # 1. Transfer cookies
+        for cookie in driver.get_cookies():
+            session.cookies.set(cookie['name'], cookie['value'])
+            
+        # 2. Transfer User-Agent to look like the same browser
+        user_agent = driver.execute_script("return navigator.userAgent")
+        session.headers.update({"User-Agent": user_agent})
+        
+        # 3. Extract form data from the current page
+        # Oracle EBS forms usually name 'DefaultFormName'
+        form = driver.find_element(By.NAME, "DefaultFormName")
+        inputs = form.find_elements(By.TAG_NAME, "input")
+        
+        data = {}
+        for inp in inputs:
+            name = inp.get_attribute("name")
+            val = inp.get_attribute("value") or ""
+            if name:
+                data[name] = val
+                
+        # 4. Handle Select fields (like FilePath)
+        selects = form.find_elements(By.TAG_NAME, "select")
+        for sel_el in selects:
+            sel_name = sel_el.get_attribute("name")
+            if sel_name:
+                select_obj = Select(sel_el)
+                data[sel_name] = select_obj.first_selected_option.get_attribute("value")
+                
+        # 5. Inject/Override parameters for the Download event
+        # This simulates the JS call: submitForm('DefaultFormName',1,{event:'Download',source:'Download'});
+        data['event'] = 'Download'
+        data['source'] = 'Download'
+        # Ensure the filename is correct even if Selenium send_keys just happened
+        data['FileName'] = filename
+        
+        url = driver.current_url
+        logger.info("     Initiating POST request via requests session...")
+        
+        response = session.post(url, data=data, stream=True, timeout=60)
+        
+        # 6. Validate response
+        content_type = response.headers.get("Content-Type", "").lower()
+        if "text/html" in content_type:
+            # Check if it's a small error page
+            if len(response.content) < 5000:
+                logger.warning("     Server returned HTML instead of a file. Likely an error.")
+                return False
+        
+        # If we got here, we likely have the file or a very large HTML (unlikely)
+        # Check Content-Disposition for filename or just save it
+        disp = response.headers.get("Content-Disposition", "")
+        save_name = filename
+        if "filename=" in disp:
+            save_name = disp.split("filename=")[-1].strip('"').strip("'")
+            
+        # Ensure it starts with DSNO if that's the rule
+        if not save_name.upper().startswith("DSNO") and "text/html" in content_type:
+             logger.warning("     Incorrect file type detected in requests response.")
+             return False
+
+        file_path = os.path.join(download_dir, save_name)
+        with open(file_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        logger.info("     Download successful via requests: %s", save_name)
+        return True
+        
+    except Exception as e:
+        logger.error("     Unexpected error in requests download: %s", e)
+        return False
+
+
 def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_event=None):
     """Try to download a file from the current folder."""
     try:
@@ -363,54 +444,35 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
         field.send_keys(filename)
         time.sleep(5)
         field.send_keys(Keys.TAB)
-        time.sleep(1)
+        time.sleep(2)
 
-        # Clear previous performance logs to focus on new events
-        driver.get_log("performance")
+        # 1. Check for EBS LOV/Popup (indicates file not found uniquely)
+        popup_identifiers = [
+            (By.ID, "lovPopUp_FileName"),
+            (By.ID, "closeAnchorlovPopUp_FileName"),
+            (By.ID, "FNDDIALOG"),
+            (By.CSS_SELECTOR, "div[id*='lovPopUp']"),
+            (By.CLASS_NAME, "xmb"),
+        ]
+        for by, sel in popup_identifiers:
+            try:
+                els = driver.find_elements(by, sel)
+                if els and any(e.is_displayed() for e in els):
+                    logger.info("EBS Popup/Dialog detected — file not found in this folder.")
+                    try:
+                        driver.execute_script("document.getElementById('closeAnchorlovPopUp_FileName')?.click();")
+                    except: pass
+                    return False
+            except: pass
 
-        button = wait.until(EC.element_to_be_clickable((By.ID, "Download")))
-        button.click()
-
-        # Monitor native download via CDP Network
-        logger.info("Monitoring file via CDP Network...")
-        download_guid = None
-        suggested_name = filename
-        completed = False
-        start_time = time.time()
-
-        # Wait up to 120 seconds for download to complete
-        while time.time() - start_time < 120:
-            if cancel_event and cancel_event.is_set():
-                logger.info("Download attempt cancelled by user.")
-                return False
-            logs = driver.get_log("performance")
-            for entry in logs:
-                try:
-                    msg = json.loads(entry["message"])["message"]
-                    if msg["method"] == "Page.downloadWillBegin":
-                        download_guid = msg["params"]["guid"]
-                        if "suggestedFilename" in msg["params"]:
-                            suggested_name = msg["params"]["suggestedFilename"]
-                            logger.info("File detected: %s", suggested_name)
-                    elif msg["method"] == "Page.downloadProgress":
-                        if download_guid and msg["params"].get("guid") == download_guid:
-                            if msg["params"]["state"] == "completed":
-                                completed = True
-                except Exception:
-                    pass
-
-            if completed:
-                break
-            time.sleep(1)
-
-        if completed:
-            logger.info("Native download completed successfully: %s", suggested_name)
+        # 3. Use requests to download (reusing cookies and form state)
+        if _download_via_requests(driver, filename, config.download_dir):
             return True
-        else:
-            logger.warning("Timeout waiting for download (CDP Timeout).")
-            return False
+        
+        return False
+
     except Exception as e:
-        logger.warning("Error attempting download: %s", e)
+        logger.warning("Error in _attempt_download: %s", e)
         return False
 
 

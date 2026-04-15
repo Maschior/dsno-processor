@@ -188,16 +188,17 @@ def perform_microsoft_login(
         for _ in range(10):
             if cancel_event and cancel_event.is_set():
                 raise CanceledError("Cancelled by user")
-            try:
-                err_el = driver.find_element(By.ID, "passwordError")
-                if err_el.is_displayed():
-                    raise LoginError(f"Login failed: {err_el.text}")
-            except LoginError as e:
-                logger.warning("Error entering password: %s", e)
-                raise
-            except CanceledError as e:
-                logger.warning("Cancelled by user: %s", e)
-                raise
+            
+            # Use find_elements to avoid NoSuchElementException if not found
+            err_elements = driver.find_elements(By.ID, "passwordError")
+            if err_elements and err_elements[0].is_displayed():
+                err_msg = err_elements[0].text
+                raise LoginError(f"Login failed: {err_msg}")
+            
+            # If we see signs of redirecting, we can break early
+            if "kmsi" in driver.current_url.lower() or "ebs" in driver.current_url.lower():
+                break
+
             time.sleep(0.5)
             
     except LoginError:
