@@ -23,3 +23,9 @@ class DsnoFileError(DsnoProcessorError):
 
 class InvalidDateRangeError(DsnoProcessorError):
     """Raised when the date range format is invalid."""
+
+class LoginError(DsnoProcessorError):
+    """Raised when the login fails."""
+
+class CanceledError(DsnoProcessorError):
+    """Raised when the operation is canceled by the user."""

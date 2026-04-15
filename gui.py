@@ -26,7 +26,7 @@ from dsno_processor.config import (
 )
 from dsno_processor.ebs_download import DownloadConfig, run_download
 from dsno_processor.ebs_upload import UploadConfig, run_upload
-from dsno_processor.exceptions import ConfigurationError
+from dsno_processor.exceptions import ConfigurationError, CanceledError, LoginError
 from dsno_processor.i18n import t, set_language, SUPPORTED_LANGUAGES
 
 # ── Appearance ────────────────────────────────────────────────────────
@@ -557,7 +557,8 @@ class ProgressDashboard(ctk.CTkFrame):
         "pending": ("#455a64", "#90a4ae"),
     }
 
-    def __init__(self, master, **kwargs) -> None:
+    def __init__(self, master, cancel_command=None, **kwargs) -> None:
+        self.cancel_command = cancel_command
         super().__init__(master, fg_color="transparent", **kwargs)
         self._total = 0
         self._done = 0
@@ -567,7 +568,30 @@ class ProgressDashboard(ctk.CTkFrame):
         self._running = False
         self._spinner_idx = 0
         self._spinner_job = None
+        self._cancelled = False
+        
+        self._idle_idx = 0
+        self._idle_job = None
+        
+        try:
+            from PIL import Image
+            self._empty_img = ctk.CTkImage(light_image=Image.new("RGBA", (1, 1), (0,0,0,0)), size=(1, 1))
+            self._hourglass_imgs = [
+                ctk.CTkImage(
+                    light_image=Image.open(f"assets/icons/hourglass/hourglass-{p}_light.png"),
+                    dark_image=Image.open(f"assets/icons/hourglass/hourglass-{p}_dark.png"),
+                    size=(20, 20)
+                ) for p in ["high", "medium", "low"]
+            ]
+        except Exception as e:
+            import logging
+            logging.error(f"Could not load hourglass images: {e}")
+            self._hourglass_imgs = []
+            self._empty_img = None
+
         self._build_ui()
+        if self._hourglass_imgs:
+            self._tick_idle()
 
     # ── UI construction ──────────────────────────────────────────
     def _build_ui(self) -> None:
@@ -577,18 +601,31 @@ class ProgressDashboard(ctk.CTkFrame):
         phase_inner = ctk.CTkFrame(phase_frame, fg_color="transparent")
         phase_inner.pack(fill="x", padx=12, pady=8)
 
+        # Using grid for precise alignment: [Emoji (30px)] [Centered Text (Weight 1)] [Symmetry Spacer (30px)]
+        phase_inner.grid_columnconfigure(0, weight=0)
+        phase_inner.grid_columnconfigure(1, weight=1)
+        phase_inner.grid_columnconfigure(2, weight=0)
+
         self._spinner_label = ctk.CTkLabel(
-            phase_inner, text="", width=20,
+            phase_inner, text="", width=30,
             font=ctk.CTkFont(size=14),
         )
-        self._spinner_label.pack(side="left", padx=(0, 8))
+        self._spinner_label.grid(row=0, column=0, sticky="w")
+
         self._phase_label = ctk.CTkLabel(
             phase_inner,
             text=t("dash.waiting"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             text_color=("gray40", "gray60"),
+            image=self._hourglass_imgs[0] if getattr(self, "_hourglass_imgs", []) else None,
+            compound="left",
+            padx=8
         )
-        self._phase_label.pack(side="left", fill="x", expand=True)
+        self._phase_label.grid(row=0, column=1, sticky="nsew")
+
+        # Hidden spacer to balance the emoji on the left for perfect text centering
+        self._symmetry_spacer = ctk.CTkLabel(phase_inner, text="", width=30)
+        self._symmetry_spacer.grid(row=0, column=2, sticky="e")
 
         # Progress bar
         prog_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -599,9 +636,27 @@ class ProgressDashboard(ctk.CTkFrame):
         )
         self._progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self._progress_bar.set(0)
+
+        if getattr(self, "cancel_command", None):
+            try:
+                from PIL import Image
+                self.cancel_btn = ctk.CTkButton(
+                    prog_frame,
+                    image=ctk.CTkImage(light_image=Image.open("assets/icons/cancel_light.png"), dark_image=Image.open("assets/icons/cancel_dark.png")),
+                    text="",
+                    height=24, width=24,
+                    corner_radius=4, fg_color="transparent", hover_color="#b71c1c",
+                    state="disabled",
+                    command=self.cancel_command
+                )
+                self.cancel_btn.pack(side="right", padx=(8, 0))
+            except Exception as e:
+                import logging
+                logging.error(f"Could not load cancel icons for progress board: {e}")
+
         self._progress_label = ctk.CTkLabel(
             prog_frame, text="0 / 0",
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=11), width=100,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=11), width=50,
         )
         self._progress_label.pack(side="right")
 
@@ -641,6 +696,7 @@ class ProgressDashboard(ctk.CTkFrame):
         def _do():
             self._total = total
             self._done = self._success_count = self._error_count = self._skipped_count = 0
+            self._cancelled = False
             self._running = True
             for w in self._cards_frame.winfo_children():
                 w.destroy()
@@ -655,7 +711,7 @@ class ProgressDashboard(ctk.CTkFrame):
             for k in self._stat_labels:
                 self._stat_labels[k].configure(text="0")
             self._stat_labels["pending"].configure(text=str(total))
-            self._phase_label.configure(text=t("dash.starting"), text_color=("#1565c0", "#64b5f6"))
+            self._phase_label.configure(text=t("dash.starting"), text_color=("#1565c0", "#64b5f6"), image=self._empty_img)
             self._start_spinner()
         self.after(0, _do)
 
@@ -690,7 +746,11 @@ class ProgressDashboard(ctk.CTkFrame):
         def _do():
             self._running = False
             self._stop_spinner()
-            if self._error_count > 0:
+            self._phase_label.configure(image=self._empty_img)
+            if self._cancelled:
+                self._phase_label.configure(text=f"Cancelled", text_color=("#c62828", "#ef5350"))
+                self._spinner_label.configure(text="⚠️")
+            elif self._error_count > 0:
                 self._phase_label.configure(text=f"Completed with {self._error_count} error(s)", text_color=("#c62828", "#ef5350"))
                 self._spinner_label.configure(text="⚠️")
             else:
@@ -698,6 +758,17 @@ class ProgressDashboard(ctk.CTkFrame):
                 self._spinner_label.configure(text="✅")
             self._progress_bar.set(1)
         self.after(0, _do)
+
+    def _tick_idle(self) -> None:
+        if self._running:
+            return
+        if getattr(self, "_hourglass_imgs", []) and self._phase_label.cget("text") == t("dash.waiting"):
+            img = self._hourglass_imgs[self._idle_idx % len(self._hourglass_imgs)]
+            self._phase_label.configure(image=img)
+            self._idle_idx += 1
+            self._idle_job = self.after(200, self._tick_idle)
+        else:
+            self._idle_job = self.after(200, self._tick_idle)
 
     # ── Internal ──────────────────────────────────────────────────
     def _add_card(self, name: str, status: str, detail: str = "") -> None:
@@ -742,6 +813,102 @@ class ProgressDashboard(ctk.CTkFrame):
         self._spinner_label.configure(text=self._SPINNER[self._spinner_idx % len(self._SPINNER)])
         self._spinner_idx += 1
         self._spinner_job = self.after(100, self._tick_spinner)
+
+
+class BlockingOverlay(ctk.CTkFrame):
+    """Full-screen overlay with blurred background to block UI during loading."""
+
+    def __init__(self, master, hourglass_imgs, **kwargs) -> None:
+        super().__init__(master, fg_color="transparent", corner_radius=0, **kwargs)
+        self._hourglass_imgs = [
+            ctk.CTkImage(
+                light_image=img._light_image,
+                dark_image=img._dark_image,
+                size=(64, 64)
+            ) for img in hourglass_imgs
+        ] if hourglass_imgs else []
+        self._idx = 0
+        self._job = None
+        self._bg_photo = None
+        self._icon_photos = [] # Store PhotoImages for canvas use
+
+        # Use a Canvas for true transparency over the background image
+        self._canvas = tk.Canvas(self, bd=0, highlightthickness=0, bg="black")
+        self._canvas.place(x=0, y=0, relwidth=1, relheight=1)
+
+        self._bg_id = None
+        self._icon_id = None
+        self._text_id = None
+
+    def capture_blur(self) -> None:
+        """Take a screenshot, blur it, and set as canvas background."""
+        try:
+            import pyautogui
+            from PIL import ImageFilter, ImageTk, Image as PilImage
+
+            master = self.master
+            master.update_idletasks()
+
+            x = master.winfo_rootx()
+            y = master.winfo_rooty()
+            w = master.winfo_width()
+            h = master.winfo_height()
+
+            if w < 2 or h < 2:
+                return
+
+            screenshot = pyautogui.screenshot(region=(x, y, w, h))
+            blurred = screenshot.filter(ImageFilter.GaussianBlur(radius=14))
+            dim = PilImage.new("RGBA", blurred.size, (0, 0, 0, 160)) # slightly darker
+            blurred = blurred.convert("RGBA")
+            final_bg = PilImage.alpha_composite(blurred, dim).convert("RGB")
+
+            self._bg_photo = ImageTk.PhotoImage(final_bg)
+            
+            # Clear existing canvas items
+            self._canvas.delete("all")
+            
+            # Draw background
+            self._bg_id = self._canvas.create_image(0, 0, image=self._bg_photo, anchor="nw")
+            
+            # Prepare icon PhotoImages if not done (Canvas needs PhotoImage, not CTkImage)
+            if not self._icon_photos and self._hourglass_imgs:
+                mode = ctk.get_appearance_mode().lower()
+                for img in self._hourglass_imgs:
+                    pil_img = img._dark_image if mode == "dark" else img._light_image
+                    pil_img = pil_img.resize((64, 64), PilImage.Resampling.LANCZOS)
+                    self._icon_photos.append(ImageTk.PhotoImage(pil_img))
+
+            cx, cy = w // 2, h // 2
+            
+            # Draw Icon
+            if self._icon_photos:
+                self._icon_id = self._canvas.create_image(cx, cy - 30, image=self._icon_photos[0])
+            
+            # Draw Text
+            self._text_id = self._canvas.create_text(
+                cx, cy + 40,
+                text=t("msg.cancelling", default="Cancelling..."),
+                fill="white",
+                font=(_FONT_FAMILY, 13, "normal"),
+                justify="center"
+            )
+
+        except Exception as e:
+            logging.warning(f"BlockingOverlay: canvas setup failed ({e})")
+            self._canvas.configure(bg="#1a1a1a")
+
+    def start_animation(self) -> None:
+        if not self._icon_photos or self._icon_id is None:
+            return
+        self._idx = (self._idx + 1) % len(self._icon_photos)
+        self._canvas.itemconfig(self._icon_id, image=self._icon_photos[self._idx])
+        self._job = self.after(250, self.start_animation)
+
+    def stop_animation(self) -> None:
+        if self._job:
+            self.after_cancel(self._job)
+            self._job = None
 
 class LogWindow(ctk.CTkToplevel):
     def __init__(self, master) -> None:
@@ -824,7 +991,22 @@ class DSNOApp(ctk.CTk):
 
         # ── Build UI ─────────────────────────────────────────────
         self._create_widgets(default_customer, default_control, default_dsno_dir)
+        
+        # Initialize blocking overlay
+        h_imgs = getattr(self.dashboard, "_hourglass_imgs", [])
+        self.blocking_overlay = BlockingOverlay(self, h_imgs)
+        
         self._setup_logging()
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+    def _on_closing(self) -> None:
+        """Handle window close event to ensure background threads can clean up."""
+        for ev_attr in ["_processor_cancel_event", "_dl_cancel_event", "_ul_cancel_event"]:
+            if hasattr(self, ev_attr):
+                ev = getattr(self, ev_attr)
+                if ev:
+                    ev.set()
+        self.destroy()
 
     # ──────────────────────────────────────────────────────────────
     # Setup
@@ -842,6 +1024,18 @@ class DSNOApp(ctk.CTk):
         self.log_window.textbox.configure(state="normal")
         self.log_window.textbox.delete("1.0", "end")
         self.log_window.textbox.configure(state="disabled")
+
+    def _show_blocking_overlay(self) -> None:
+        # capture_blur() must run BEFORE place() so the overlay
+        # itself is not yet visible in the screenshot
+        self.blocking_overlay.capture_blur()
+        self.blocking_overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.blocking_overlay.lift()
+        self.blocking_overlay.start_animation()
+
+    def _hide_blocking_overlay(self) -> None:
+        self.blocking_overlay.stop_animation()
+        self.blocking_overlay.place_forget()
     
     def _create_widgets(
         self,
@@ -888,30 +1082,73 @@ class DSNOApp(ctk.CTk):
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
         header_inner.pack(fill="x", padx=12, pady=(10, 0))
         
-        ctk.CTkLabel(
-            header_inner,
+        # 1. Text Container - Perfectly Centered
+        # We use a subframe that we will pack with expand=True to center it
+        text_container = ctk.CTkFrame(header_inner, fg_color="transparent")
+        text_container.pack(expand=True)
+
+        title_label = ctk.CTkLabel(
+            text_container,
             text=t("app.title"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=22, weight="bold"),
-        ).pack(side="left", expand=True)
-
-        ctk.CTkButton(
-            header_inner,
-            text=t("btn.settings"),
-            width=140,
-            height=32,
-            corner_radius=8,
-            fg_color=("gray70", "gray30"),
-            hover_color=("gray60", "gray40"),
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            command=self._open_settings,
-        ).pack(side="right")
+        )
+        title_label.pack()
 
         ctk.CTkLabel(
-            header,
+            text_container,
             text=t("app.subtitle"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
             text_color="gray60",
-        ).pack(pady=(0, 14))
+        ).pack()
+
+        # 2. Logo - Placed relative to the title_label without affecting its layout
+        try:
+            logo_img = ctk.CTkImage(
+                light_image=Image.open("assets/icons/swap_light.png"),
+                dark_image=Image.open("assets/icons/swap_dark.png"),
+                size=(28, 28)
+            )
+            logo_label = ctk.CTkLabel(text_container, image=logo_img, text="")
+            # Place it to the left of the title_label using relative coordinates
+            logo_label.place(in_=title_label, relx=0, x=-35, rely=0.5, anchor="center")
+        except Exception:
+            pass
+
+        # 3. Buttons Container - On the far right
+        # We use a separate frame inside header_inner and place it using absolute positioning or packing
+        header_btns = ctk.CTkFrame(header_inner, fg_color="transparent")
+        header_btns.place(relx=1.0, rely=0, anchor="ne")
+
+        ctk.CTkButton(
+            header_btns,
+            image=ctk.CTkImage(
+                light_image=Image.open("assets/icons/settings_light.png"),
+                dark_image=Image.open("assets/icons/settings_dark.png"),
+                size=(18, 18)
+            ),
+            text="",
+            width=30,
+            height=30,
+            corner_radius=6,
+            fg_color="transparent",
+            command=self._open_settings,
+        ).pack(side="right")
+
+        self._lang_btn = ctk.CTkButton(
+            header_btns,
+            image=ctk.CTkImage(
+                light_image=Image.open("assets/icons/language_light.png"),
+                dark_image=Image.open("assets/icons/language_dark.png"),
+                size=(18, 18)
+            ),
+            text="",
+            width=30,
+            height=30,
+            corner_radius=6,
+            fg_color="transparent",
+            command=self._change_language,
+        )
+        self._lang_btn.pack(side="right", padx=(0, 4))
 
         # ── Tabview ──────────────────────────────────────────────
         self._tabview = ctk.CTkTabview(
@@ -982,19 +1219,25 @@ class DSNOApp(ctk.CTk):
         )
         self.dsno_row.pack(fill="x", pady=4)
 
-        # Run button
+        # Run buttons container
+        btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=12)
+
         self.run_btn = ctk.CTkButton(
-            tab,
+            btn_frame,
             text=t("proc.start_btn"),
             height=40,
             corner_radius=10,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=14, weight="bold"),
             command=self._start_processing,
         )
-        self.run_btn.pack(pady=12, fill="x")
+        self.run_btn.pack(padx=(0, 4))
 
         # Progress dashboard
-        self.dashboard = ProgressDashboard(tab)
+        self.dashboard = ProgressDashboard(
+            tab,
+            cancel_command=lambda: (self._show_blocking_overlay(), getattr(self, "_processor_cancel_event").set()) if hasattr(self, "_processor_cancel_event") else None
+        )
         self.dashboard.pack(fill="both", expand=True, pady=(0, 4))
 
     # ──────────────────────────────────────────────────────────────
@@ -1123,11 +1366,15 @@ class DSNOApp(ctk.CTk):
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             command=self._start_download,
         )
-        self.dl_start_btn.pack(fill="x", pady=(0, 6))
+        self.dl_start_btn.pack(pady=(0, 6))
 
         # ── Progress sub-tab ─────────────────────────────────────
         prog_tab = inner_tab.tab(self._DL_TAB_PROGRESS)
-        self.dl_dashboard = ProgressDashboard(prog_tab)
+        
+        self.dl_dashboard = ProgressDashboard(
+            prog_tab,
+            cancel_command=lambda: (self._show_blocking_overlay(), getattr(self,("_dl_cancel_event")).set()) if hasattr(self, "_dl_cancel_event") else None
+        )
         self.dl_dashboard.pack(fill="both", expand=True, pady=4)
 
     # ──────────────────────────────────────────────────────────────
@@ -1216,11 +1463,15 @@ class DSNOApp(ctk.CTk):
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             command=self._start_upload,
         )
-        self.ul_start_btn.pack(fill="x", pady=(0, 6))
+        self.ul_start_btn.pack(pady=(0, 6))
 
         # ── Progress sub-tab ─────────────────────────────────────
         prog_tab = inner_tab.tab(self._UL_TAB_PROGRESS)
-        self.ul_dashboard = ProgressDashboard(prog_tab)
+        
+        self.ul_dashboard = ProgressDashboard(
+            prog_tab,
+            cancel_command=lambda: (self._show_blocking_overlay(), getattr(self,("_ul_cancel_event")).set()) if hasattr(self, "_ul_cancel_event") else None
+        )
         self.ul_dashboard.pack(fill="both", expand=True, pady=4)
 
     # ──────────────────────────────────────────────────────────────
@@ -1293,6 +1544,8 @@ class DSNOApp(ctk.CTk):
 
     def _start_processing(self) -> None:
         self.run_btn.configure(state="disabled")
+        self.dashboard.cancel_btn.configure(state="normal")
+        self._processor_cancel_event = threading.Event()
         self._clear_log()
         thread = threading.Thread(target=self._process_thread, daemon=True)
         thread.start()
@@ -1310,6 +1563,8 @@ class DSNOApp(ctk.CTk):
                 self.dashboard.mark_error(data["name"], data["detail"])
             elif event == "skipped":
                 self.dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "cancelled":
+                self.dashboard._cancelled = True
             elif event == "finished":
                 self.dashboard.finish()
         return callback
@@ -1331,13 +1586,25 @@ class DSNOApp(ctk.CTk):
                 messagebox.showinfo(t("msg.complete_title"), t("msg.processing_errors", summary=summary, failed=result.failed))
             else:
                 messagebox.showinfo(t("dash.success"), summary)
+        except CanceledError:
+            logging.info("Processing was cancelled by the user.")
+            self.dashboard.set_phase(t("msg.cancelled_by_user", default="Cancelled by user"))
+            self.dashboard._cancelled = True
+            self.dashboard.finish()
+        except LoginError as exc:
+            logging.error("Login failed: %s", exc)
+            self.dashboard.set_phase(f"Login Error: {exc}")
+            self.dashboard.finish()
+            messagebox.showerror(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.error("Error during processing: %s", exc)
             self.dashboard.set_phase(f"Error: {exc}")
             self.dashboard.finish()
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
+            self._hide_blocking_overlay()
             self.run_btn.configure(state="normal")
+            self.dashboard.cancel_btn.configure(state="disabled")
 
     # ──────────────────────────────────────────────────────────────
     # Processing — EBS Download tab
@@ -1345,6 +1612,8 @@ class DSNOApp(ctk.CTk):
 
     def _start_download(self) -> None:
         self.dl_start_btn.configure(state="disabled")
+        self.dl_dashboard.cancel_btn.configure(state="normal")
+        self._dl_cancel_event = threading.Event()
         self._dl_tabview.set(self._DL_TAB_PROGRESS)
         self._clear_log()
 
@@ -1376,24 +1645,37 @@ class DSNOApp(ctk.CTk):
             elif event == "success": self.dl_dashboard.mark_success(data["name"], data.get("detail", ""))
             elif event == "error":   self.dl_dashboard.mark_error(data["name"], data["detail"])
             elif event == "skipped": self.dl_dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "cancelled": self.dl_dashboard._cancelled = True
             elif event == "finished":self.dl_dashboard.finish()
 
         threading.Thread(target=self._download_thread, args=(config, _cb), daemon=True).start()
 
     def _download_thread(self, config: DownloadConfig, progress_cb) -> None:
         try:
-            result = run_download(config, progress_callback=progress_cb)
+            result = run_download(config, progress_callback=progress_cb, cancel_event=getattr(self, "_dl_cancel_event", None))
             total = result["success"] + result["skipped"] + len(result["failures"])
             summary = t("msg.download_complete", success=result['success'], total=total - result['skipped'])
             logging.getLogger("dsno_processor.ebs_download").info(summary)
             messagebox.showinfo(t("msg.download_title"), summary)
+        except CanceledError:
+            logging.getLogger("dsno_processor.ebs_download").info("Download was cancelled by the user.")
+            self.dl_dashboard.set_phase(t("msg.cancelled_by_user", default="Cancelled by user"))
+            self.dl_dashboard._cancelled = True
+            self.dl_dashboard.finish()
+        except LoginError as exc:
+            logging.getLogger("dsno_processor.ebs_download").error("Login failed: %s", exc)
+            self.dl_dashboard.set_phase(f"Login Error: {exc}")
+            self.dl_dashboard.finish()
+            messagebox.showerror(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_download").error("Error: %s", exc)
             self.dl_dashboard.set_phase(f"Error: {exc}")
             self.dl_dashboard.finish()
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
+            self._hide_blocking_overlay()
             self.dl_start_btn.configure(state="normal")
+            self.dl_dashboard.cancel_btn.configure(state="disabled")
 
     # ──────────────────────────────────────────────────────────────
     # Processing — EBS Upload tab
@@ -1401,6 +1683,8 @@ class DSNOApp(ctk.CTk):
 
     def _start_upload(self) -> None:
         self.ul_start_btn.configure(state="disabled")
+        self.ul_dashboard.cancel_btn.configure(state="normal")
+        self._ul_cancel_event = threading.Event()
         self._ul_tabview.set(self._UL_TAB_PROGRESS)
         self._clear_log()
 
@@ -1425,24 +1709,37 @@ class DSNOApp(ctk.CTk):
             elif event == "success": self.ul_dashboard.mark_success(data["name"], data.get("detail", ""))
             elif event == "error":   self.ul_dashboard.mark_error(data["name"], data["detail"])
             elif event == "skipped": self.ul_dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "cancelled": self.ul_dashboard._cancelled = True
             elif event == "finished":self.ul_dashboard.finish()
 
         threading.Thread(target=self._upload_thread, args=(config, _cb), daemon=True).start()
 
     def _upload_thread(self, config: UploadConfig, progress_cb) -> None:
         try:
-            result = run_upload(config, progress_callback=progress_cb)
+            result = run_upload(config, progress_callback=progress_cb, cancel_event=getattr(self, "_ul_cancel_event", None))
             total = result["success"] + result["skipped"] + len(result["failures"])
             summary = t("msg.upload_complete", success=result['success'], total=total)
             logging.getLogger("dsno_processor.ebs_upload").info(summary)
             messagebox.showinfo(t("msg.upload_title"), summary)
+        except CanceledError:
+            logging.getLogger("dsno_processor.ebs_upload").info("Upload was cancelled by the user.")
+            self.ul_dashboard.set_phase(t("msg.cancelled_by_user", default="Cancelled by user"))
+            self.ul_dashboard._cancelled = True
+            self.ul_dashboard.finish()
+        except LoginError as exc:
+            logging.getLogger("dsno_processor.ebs_upload").error("Login failed: %s", exc)
+            self.ul_dashboard.set_phase(f"Login Error: {exc}")
+            self.ul_dashboard.finish()
+            messagebox.showerror(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_upload").error("Error: %s", exc)
             self.ul_dashboard.set_phase(f"Error: {exc}")
             self.ul_dashboard.finish()
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
+            self._hide_blocking_overlay()
             self.ul_start_btn.configure(state="normal")
+            self.ul_dashboard.cancel_btn.configure(state="disabled")
 
     # ──────────────────────────────────────────────────────────────
     # Settings
@@ -1450,6 +1747,28 @@ class DSNOApp(ctk.CTk):
 
     def _open_settings(self) -> None:
         SettingsWindow(self, on_save=self._reload_config)
+
+    def _change_language(self) -> None:
+        """Show the language selection popup menu."""
+        LanguageMenu(self, self._lang_btn, self._set_language_from_menu)
+
+    def _set_language_from_menu(self, lang_code: str) -> None:
+        """Callback from LanguageMenu to update application language."""
+        if not self._app_config:
+            return
+            
+        if self._app_config.language == lang_code:
+            return
+
+        self._app_config.language = lang_code
+        try:
+            save_config(self._app_config)
+            messagebox.showinfo(
+                t("settings.saved_title"),
+                t("settings.general.restart_msg")
+            )
+        except Exception as e:
+            messagebox.showerror(t("settings.save_error_title"), str(e))
 
     def _reload_config(self) -> None:
         """Reload config from disk and refresh main window defaults."""
@@ -1555,7 +1874,8 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            text="✖  Cancel",
+            image=ctk.CTkImage(light_image=Image.open("assets/icons/cancel_light.png"), dark_image=Image.open("assets/icons/cancel_dark.png")),
+            text=t("btn.cancel"),
             height=38,
             corner_radius=10,
             fg_color=("gray70", "gray30"),
@@ -1566,6 +1886,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
+            image=ctk.CTkImage(light_image=Image.open("assets/icons/save_light.png"), dark_image=Image.open("assets/icons/save_dark.png")),
             text=t("btn.save"),
             height=38,
             corner_radius=10,
@@ -2064,6 +2385,90 @@ class SettingsWindow(ctk.CTkToplevel):
             )
 
 
+
+# ──────────────────────────────────────────────────────────────
+# Language Popup Menu
+# ──────────────────────────────────────────────────────────────
+
+class LanguageMenu(ctk.CTkToplevel):
+    """Small popup window for language selection."""
+    def __init__(self, master, lang_btn, on_select) -> None:
+        super().__init__(master)
+        self.overrideredirect(True) # Remove title bar
+        self.attributes("-topmost", True)
+        self.on_select = on_select
+
+        # Position below the button
+        self.update_idletasks() # Ensure dimensions are calculated
+        btn_x = lang_btn.winfo_rootx()
+        btn_y = lang_btn.winfo_rooty()
+        btn_h = lang_btn.winfo_height()
+        
+        # UI Setup - Using a transparency hack for rounded corners on Windows
+        menu_bg = ("gray95", "gray10")
+        self.configure(fg_color="#010101")
+        self.attributes("-transparentcolor", "#010101")
+        
+        inner = ctk.CTkFrame(
+            self, 
+            fg_color=menu_bg, 
+            corner_radius=10, 
+            border_width=1, 
+            border_color=("gray80", "gray20")
+        )
+        inner.pack(padx=2, pady=2, fill="both", expand=False)
+
+        from dsno_processor.i18n import SUPPORTED_LANGUAGES, get_language
+        current_lang = get_language()
+
+        try:
+            from PIL import Image
+            check_icon = ctk.CTkImage(
+                light_image=Image.open("assets/icons/check_light.png"),
+                dark_image=Image.open("assets/icons/check_dark.png"),
+                size=(14, 14)
+            )
+        except Exception:
+            check_icon = None
+
+        # Margins inside the box
+        margin_x = 8
+        margin_y = 6
+        spacing = 4
+
+        for i, (code, name) in enumerate(SUPPORTED_LANGUAGES.items()):
+            # Use specific padding for top and bottom elements to create a group margin
+            p_top = margin_y if i == 0 else spacing // 2
+            p_bottom = margin_y if i == len(SUPPORTED_LANGUAGES) - 1 else spacing // 2
+
+            btn = ctk.CTkButton(
+                inner,
+                text=name,
+                image=check_icon if code == current_lang else None,
+                compound="left",
+                anchor="w",
+                height=28,
+                width=120,
+                corner_radius=6,
+                fg_color="transparent",
+                text_color=("gray20", "gray90"),
+                hover_color=("gray80", "gray20"),
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+                command=lambda c=code: self._select(c)
+            )
+            btn.pack(fill="x", padx=margin_x, pady=(p_top, p_bottom))
+
+        # Dynamic height calculation
+        total_h = (len(SUPPORTED_LANGUAGES) * 28) + (2 * margin_y) + ((len(SUPPORTED_LANGUAGES) - 1) * spacing) + 10
+        self.geometry(f"140x{total_h}+{btn_x - 100}+{btn_y + btn_h + 5}")
+
+        # Close on focus out
+        self.bind("<FocusOut>", lambda e: self.destroy())
+        self.focus_set()
+
+    def _select(self, code: str) -> None:
+        self.on_select(code)
+        self.destroy()
 
 def start_gui() -> None:
     """Launch the DSNO Processor GUI."""

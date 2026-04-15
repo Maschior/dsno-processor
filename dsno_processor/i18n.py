@@ -32,7 +32,7 @@ from __future__ import annotations
 
 SUPPORTED_LANGUAGES: dict[str, str] = {
     "en": "English",
-    "pt": "Português",
+    "pt": "Português (BR)",
 }
 
 # ── Module state ─────────────────────────────────────────────────────
@@ -218,6 +218,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "msg.processing_errors": "{summary}\n{failed} error(s).",
         "msg.download_complete": "Download complete: {success}/{total} successful.",
         "msg.upload_complete": "Upload complete: {success}/{total} successful.",
+        "msg.cancelling": "Cancelling...\nPlease wait.",
     },
 
     # ══════════════════════════════════════════════════════════════
@@ -396,6 +397,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "msg.processing_errors": "{summary}\n{failed} erro(s).",
         "msg.download_complete": "Download concluído: {success}/{total} com sucesso.",
         "msg.upload_complete": "Upload concluído: {success}/{total} com sucesso.",
+        "msg.cancelling": "Cancelando...\nPor favor, aguarde.",
     },
 }
 

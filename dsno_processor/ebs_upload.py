@@ -21,7 +21,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from .exceptions import ConfigurationError
+from .exceptions import ConfigurationError, CanceledError, LoginError
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +114,7 @@ def list_local_files(directory: str) -> list[str]:
 def start_browser(headless: bool = False) -> webdriver.Chrome:
     """Start a Chrome browser for uploads."""
     options = webdriver.ChromeOptions()
-    options.add_experimental_option("detach", True)
-
+    # `detach` is removed to prevent zombie processes if the app closes unexpectedly
     if headless:
         options.add_argument("--headless=new")
         options.add_argument("--disable-gpu")
@@ -123,7 +122,6 @@ def start_browser(headless: bool = False) -> webdriver.Chrome:
         logger.info("Headless mode enabled — browser running in background.")
 
     return webdriver.Chrome(options=options)
-
 
 def open_url(driver: webdriver.Chrome, url: str) -> None:
     """Navigate the browser to the given URL."""
@@ -137,6 +135,7 @@ def perform_microsoft_login(
     email: str,
     password: str,
     target_url: str = "",
+    cancel_event = None,
 ) -> None:
     """Automate Microsoft SSO login: click sign-in, enter email, enter password."""
     logger.info("Starting automatic Microsoft login...")
@@ -150,7 +149,11 @@ def perform_microsoft_login(
         logger.info("Clicked sign-in button.")
         time.sleep(3)
     except Exception:
-        logger.info("Sign-in button not found — possibly already on login page.")
+        logger.info("Sign-in button not found — possibly already on login page or page down.")
+
+    # Check if page is down
+    if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
+        raise Exception("Login screen or EBS appears to be down (connection error).")
 
     # Step 2: Enter email
     try:
@@ -164,8 +167,11 @@ def perform_microsoft_login(
         email_input.send_keys(Keys.RETURN)
         time.sleep(3)
     except Exception as e:
-        logger.warning("Error entering email: %s", e)
-        raise
+        logger.warning("Error entering email, or login screen not available: %s", e)
+        raise Exception("Failed to find or interact with Email input. Is the login screen loaded?")
+
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
 
     # Step 3: Enter password
     try:
@@ -177,9 +183,29 @@ def perform_microsoft_login(
         logger.info("Password entered.")
         time.sleep(1)
         password_input.send_keys(Keys.RETURN)
-        time.sleep(5)
+        
+        # Check for incorrect password
+        for _ in range(10):
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
+            try:
+                err_el = driver.find_element(By.ID, "passwordError")
+                if err_el.is_displayed():
+                    raise LoginError(f"Login failed: {err_el.text}")
+            except LoginError as e:
+                logger.warning("Error entering password: %s", e)
+                raise
+            except CanceledError as e:
+                logger.warning("Cancelled by user: %s", e)
+                raise
+            time.sleep(0.5)
+            
+    except LoginError:
+        raise
+    except CanceledError:
+        raise
     except Exception as e:
-        logger.warning("Error entering password: %s", e)
+        logger.error("Error during login: %s", e)
         raise
 
     logger.info("Waiting for EBS redirect...")
@@ -198,10 +224,16 @@ def perform_microsoft_login(
             "(may already be on the correct page or layout differs)."
         )
 
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
+
     if target_url:
         logger.info("Reloading target URL to ensure correct page...")
         driver.get(target_url)
         time.sleep(5)
+        # Final check if EBS is down after redirect
+        if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
+            raise Exception("EBS appears to be down (connection error) after login.")
 
     logger.info("Automatic login complete.")
 
@@ -269,14 +301,14 @@ def perform_upload(
 # ── Orchestrator ─────────────────────────────────────────────────────
 
 
-def run_upload(config: UploadConfig, progress_callback=None) -> dict:
+def run_upload(config: UploadConfig, progress_callback=None, cancel_event=None) -> dict:
     """Run the full upload flow.
 
     Args:
         config: Upload configuration.
         progress_callback: Optional ``(event, data_dict)`` callable for
             real-time progress updates consumed by the GUI dashboard.
-
+        cancel_event: Optional threading.Event to abort the operation.
     Returns:
         A summary dict with ``success``, ``skipped``, ``failures`` keys.
     """
@@ -320,51 +352,73 @@ def run_upload(config: UploadConfig, progress_callback=None) -> dict:
     # 4. Start browser
     _cb("phase", {"text": "Starting browser..."})
     driver = start_browser(headless=config.headless)
-    wait = WebDriverWait(driver, 15)
-
-    # 5. Open URL and auto-login
-    _cb("phase", {"text": "Opening EBS..."})
-    open_url(driver, config.ebs_url)
-    if config.email and config.password:
-        _cb("phase", {"text": "Performing automatic login..."})
-        perform_microsoft_login(driver, wait, config.email, config.password, config.ebs_url)
-
-    list_folders(driver, wait)
-
-    # 6. Upload each pending file
-    logger.info("Starting uploads (%d file(s))...", len(pending))
     success_count = 0
     failure_list: list[str] = []
 
-    for i, filename in enumerate(pending, 1):
-        full_path = os.path.join(config.upload_dir, filename)
-        _cb("phase", {"text": f"Uploading {filename} ({i}/{len(pending)})..."})
-        logger.info("[%d/%d] %s", i, len(pending), filename)
+    try:
+        wait = WebDriverWait(driver, 15)
 
-        ok = perform_upload(driver, wait, full_path, config.folder_index)
-        if ok:
-            record_success(history, filename, config.upload_dir)
-            logger.info("Upload successful!")
-            success_count += 1
-            _cb("success", {"name": filename})
-        else:
-            logger.warning("Upload failed.")
-            failure_list.append(filename)
-            _cb("error", {"name": filename, "detail": "Upload failed"})
+        # 5. Open URL and auto-login
+        _cb("phase", {"text": "Opening EBS..."})
+        open_url(driver, config.ebs_url)
+        if config.email and config.password:
+            _cb("phase", {"text": "Performing automatic login..."})
+            perform_microsoft_login(driver, wait, config.email, config.password, config.ebs_url, cancel_event)
 
-        # Reset form for the next file
-        if i < len(pending):
-            _reset_form(driver, config.ebs_url)
+        list_folders(driver, wait)
 
-    # 7. Report
-    logger.info("=" * 55)
-    logger.info("  Success:  %d file(s)", success_count)
-    logger.info("  Skipped:  %d file(s)", skipped_count)
-    logger.info("  Failed:   %d file(s)", len(failure_list))
-    if failure_list:
-        for f in failure_list:
-            logger.info("    - %s", f)
+        # 6. Upload each pending file
+        logger.info("Starting uploads (%d file(s))...", len(pending))
 
-    _cb("finished", {})
-    driver.quit()
+        for i, filename in enumerate(pending, 1):
+            if cancel_event and cancel_event.is_set():
+                logger.info("Upload process cancelled.")
+                _cb("error", {"name": "System", "detail": "Cancelled by user"})
+                raise CanceledError("Cancelled by user")
+
+            full_path = os.path.join(config.upload_dir, filename)
+            _cb("phase", {"text": f"Uploading {filename} ({i}/{len(pending)})..."})
+            logger.info("[%d/%d] %s", i, len(pending), filename)
+
+            ok = perform_upload(driver, wait, full_path, config.folder_index)
+            if ok:
+                record_success(history, filename, config.upload_dir)
+                logger.info("Upload successful!")
+                success_count += 1
+                _cb("success", {"name": filename})
+            else:
+                logger.warning("Upload failed.")
+                failure_list.append(filename)
+                _cb("error", {"name": filename, "detail": "Upload failed"})
+
+            # Reset form for the next file
+            if i < len(pending):
+                _reset_form(driver, config.ebs_url)
+
+        # 7. Report
+        logger.info("=" * 55)
+        logger.info("  Success:  %d file(s)", success_count)
+        logger.info("  Skipped:  %d file(s)", skipped_count)
+        logger.info("  Failed:   %d file(s)", len(failure_list))
+        if failure_list:
+            for f in failure_list:
+                logger.info("    - %s", f)
+
+    except LoginError as e:
+        _cb("error", {"name": "Login", "detail": str(e)})
+        raise
+    except CanceledError as e:
+        _cb("cancelled", {"name": "System", "detail": str(e)})
+        raise
+    except Exception as e:
+        logger.error(f"Process failed: {str(e)}")
+        _cb("error", {"name": "Process", "detail": str(e)})
+        raise
+    finally:
+        _cb("finished", {})
+        try:
+            driver.quit()
+        except:
+            pass
+
     return {"success": success_count, "skipped": skipped_count, "failures": failure_list}

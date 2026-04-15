@@ -23,7 +23,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from .exceptions import ConfigurationError
+from .exceptions import ConfigurationError, CanceledError, LoginError
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ def start_browser(download_dir: str, headless: bool = False) -> webdriver.Chrome
         "profile.default_content_setting_values.automatic_downloads": 1,
     }
     options.add_experimental_option("prefs", prefs)
-    options.add_experimental_option("detach", True)
+    # `detach` is removed to prevent zombie processes if the app closes unexpectedly
     options.add_argument("--safebrowsing-disable-download-protection")
     options.add_argument("--disable-web-security")
     options.add_argument("--disable-features=SafeBrowsingEnhancedProtection")
@@ -216,6 +216,7 @@ def perform_microsoft_login(
     email: str,
     password: str,
     target_url: str = "",
+    cancel_event = None,
 ) -> None:
     """Automate Microsoft SSO login: click sign-in, enter email, enter password."""
     logger.info("Starting automatic Microsoft login...")
@@ -229,7 +230,11 @@ def perform_microsoft_login(
         logger.info("Clicked sign-in button.")
         time.sleep(3)
     except Exception:
-        logger.info("Sign-in button not found — possibly already on login page.")
+        logger.info("Sign-in button not found — possibly already on login page or page down.")
+
+    # Check if page is down
+    if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
+        raise Exception("Login screen or EBS appears to be down (connection error).")
 
     # Step 2: Enter email
     try:
@@ -243,8 +248,11 @@ def perform_microsoft_login(
         email_input.send_keys(Keys.RETURN)
         time.sleep(3)
     except Exception as e:
-        logger.warning("Error entering email: %s", e)
-        raise
+        logger.warning("Error entering email, or login screen not available: %s", e)
+        raise Exception("Failed to find or interact with Email input. Is the login screen loaded?")
+
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
 
     # Step 3: Enter password
     try:
@@ -256,8 +264,29 @@ def perform_microsoft_login(
         logger.info("Password entered.")
         time.sleep(1)
         password_input.send_keys(Keys.RETURN)
-        time.sleep(5)
+        
+        # Check for incorrect password
+        for _ in range(10):
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
+            try:
+                err_el = driver.find_element(By.ID, "passwordError")
+                if err_el.is_displayed():
+                    raise LoginError(f"Login failed: {err_el.text}")
+            except Exception as e:
+                if str(e).startswith("Login failed:"):
+                    raise
+            time.sleep(0.5)
+    
+    except LoginError as e:
+        logger.error(f"Login failed: {str(e)}")
+        raise
+    except CanceledError as e:
+        logger.error(f"Operation cancelled: {str(e)}")
+        raise
     except Exception as e:
+        if "Login failed" in str(e) or "Cancelled" in str(e):
+            raise
         logger.warning("Error entering password: %s", e)
         raise
 
@@ -277,10 +306,16 @@ def perform_microsoft_login(
             "(may already be on the correct page or layout differs)."
         )
 
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
+
     if target_url:
         logger.info("Reloading target URL to ensure correct page...")
         driver.get(target_url)
         time.sleep(5)
+        # Final check if EBS is down after redirect
+        if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
+            raise Exception("EBS appears to be down (connection error) after login.")
 
     logger.info("Automatic login complete.")
 
@@ -320,7 +355,7 @@ def _file_found(driver):
         return False
 
 
-def _attempt_download(driver, wait, filename, config: DownloadConfig):
+def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_event=None):
     """Try to download a file from the current folder."""
     try:
         field = wait.until(EC.element_to_be_clickable((By.ID, "FileName")))
@@ -345,6 +380,9 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig):
 
         # Wait up to 120 seconds for download to complete
         while time.time() - start_time < 120:
+            if cancel_event and cancel_event.is_set():
+                logger.info("Download attempt cancelled by user.")
+                return False
             logs = driver.get_log("performance")
             for entry in logs:
                 try:
@@ -387,9 +425,12 @@ def download_file(
     wait: WebDriverWait,
     filename: str,
     config: DownloadConfig,
+    cancel_event=None,
 ) -> bool:
     """Try to download a file, iterating through all configured folders."""
     for i, index in enumerate(config.folder_indices, 1):
+        if cancel_event and cancel_event.is_set():
+            return False
         logger.info(
             "Trying folder %d/%d (index %d)...",
             i, len(config.folder_indices), index,
@@ -406,7 +447,7 @@ def download_file(
             _reset_form(driver, config.ebs_url)
             continue
 
-        if _attempt_download(driver, wait, filename, config):
+        if _attempt_download(driver, wait, filename, config, cancel_event):
             return True
         _reset_form(driver, config.ebs_url)
 
@@ -416,14 +457,14 @@ def download_file(
 # ── Orchestrator ─────────────────────────────────────────────────────
 
 
-def run_download(config: DownloadConfig, progress_callback=None) -> dict:
+def run_download(config: DownloadConfig, progress_callback=None, cancel_event=None) -> dict:
     """Run the full download flow.
 
     Args:
         config: Download configuration.
         progress_callback: Optional ``(event, data_dict)`` callable for
             real-time progress updates consumed by the GUI dashboard.
-
+        cancel_event: Optional threading.Event to abort the operation.
     Returns:
         A summary dict with ``success``, ``skipped``, ``failures`` keys.
     """
@@ -476,51 +517,75 @@ def run_download(config: DownloadConfig, progress_callback=None) -> dict:
     _cb("phase", {"text": "Starting browser..."})
     os.makedirs(config.download_dir, exist_ok=True)
     driver = start_browser(config.download_dir, headless=config.headless)
-    wait = WebDriverWait(driver, 15)
-
-    # 5. Open URL and auto-login
-    _cb("phase", {"text": "Opening EBS..."})
-    open_url(driver, config.ebs_url)
-    if config.email and config.password:
-        _cb("phase", {"text": "Performing automatic login..."})
-        perform_microsoft_login(driver, wait, config.email, config.password, config.ebs_url)
-
-    folders = list_folders(driver, wait)
-    for f in folders:
-        logger.info("  %s", f)
-
-    # 6. Download files
-    logger.info("Starting downloads (%d file(s))...", len(pending))
     success_count = 0
     failure_list: list[str] = []
 
-    for i, filename in enumerate(pending, 1):
-        _cb("phase", {"text": f"Downloading {filename} ({i}/{len(pending)})..."})
-        logger.info("[%d/%d] %s", i, len(pending), filename)
-        found = download_file(driver, wait, filename, config)
-        if found:
-            record_success(history, filename, config.download_dir)
-            logger.info("Download started!")
-            success_count += 1
-            _cb("success", {"name": filename})
-        else:
-            logger.warning(
-                "Not found in any of the %d folders.", len(config.folder_indices)
-            )
-            failure_list.append(filename)
-            _cb("error", {"name": filename, "detail": "Not found in folders"})
-        time.sleep(1)
+    try:
+        wait = WebDriverWait(driver, 15)
 
-    # 7. Report
-    logger.info("=" * 55)
-    logger.info("  Success:  %d file(s)", success_count)
-    logger.info("  Skipped:  %d file(s)", skipped_count)
-    logger.info("  Failed:   %d file(s)", len(failure_list))
-    if failure_list:
-        for f in failure_list:
-            logger.info("    - %s", f)
-    logger.info("  Downloads: %s", config.download_dir)
+        # 5. Open URL and auto-login
+        _cb("phase", {"text": "Opening EBS..."})
+        open_url(driver, config.ebs_url)
+        if config.email and config.password:
+            _cb("phase", {"text": "Performing automatic login..."})
+            perform_microsoft_login(driver, wait, config.email, config.password, config.ebs_url, cancel_event)
 
-    _cb("finished", {})
-    driver.quit()
+        folders = list_folders(driver, wait)
+        for f in folders:
+            logger.info("  %s", f)
+
+        # 6. Download files
+        logger.info("Starting downloads (%d file(s))...", len(pending))
+
+        for i, filename in enumerate(pending, 1):
+            if cancel_event and cancel_event.is_set():
+                logger.info("Download process cancelled.")
+                _cb("error", {"name": "System", "detail": "Cancelled by user"})
+                raise CanceledError("Cancelled by user")
+
+            _cb("phase", {"text": f"Downloading {filename} ({i}/{len(pending)})..."})
+            logger.info("[%d/%d] %s", i, len(pending), filename)
+            found = download_file(driver, wait, filename, config, cancel_event)
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
+
+            if found:
+                record_success(history, filename, config.download_dir)
+                logger.info("Download started!")
+                success_count += 1
+                _cb("success", {"name": filename})
+            else:
+                logger.warning(
+                    "Not found in any of the %d folders.", len(config.folder_indices)
+                )
+                failure_list.append(filename)
+                _cb("error", {"name": filename, "detail": "Not found in folders"})
+            time.sleep(1)
+
+        # 7. Report
+        logger.info("=" * 55)
+        logger.info("  Success:  %d file(s)", success_count)
+        logger.info("  Skipped:  %d file(s)", skipped_count)
+        logger.info("  Failed:   %d file(s)", len(failure_list))
+        if failure_list:
+            for f in failure_list:
+                logger.info("    - %s", f)
+        logger.info("  Downloads: %s", config.download_dir)
+    
+    except LoginError as e:
+        _cb("error", {"name": "Login", "detail": str(e)})
+        raise
+    except CanceledError as e:
+        _cb("cancelled", {"name": "Process", "detail": str(e)})
+        raise
+    except Exception as e:
+        _cb("error", {"name": "Process", "detail": str(e)})
+        raise
+    finally:
+        _cb("finished", {})
+        try:
+            driver.quit()
+        except:
+            pass
+
     return {"success": success_count, "skipped": skipped_count, "failures": failure_list}

@@ -121,6 +121,10 @@ class AppConfig:
     def language(self) -> str:
         return self.general.language
 
+    @language.setter
+    def language(self, value: str) -> None:
+        self.general.language = value
+
     @property
     def dsno_directory(self) -> Path:
         return self.paths.dsno_directory

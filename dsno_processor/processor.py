@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .editor import edit_navstar_dsno, move_to_processed, normalize_file
-from .exceptions import DsnoProcessorError
+from .exceptions import DsnoProcessorError, CanceledError
 from .info_reader import get_dsno_info
 from .invoice_reader import get_invoice_dsno_pairs
 from .models import DateRange, DsnoInfo, ProcessingResult
@@ -81,6 +81,7 @@ def process_dsno(
     control_sheet: str,
     dsno_dir: str,
     progress_callback=None,
+    cancel_event=None,
 ) -> ProcessingResult:
     """Run a full DSNO processing batch.
 
@@ -94,6 +95,7 @@ def process_dsno(
         dsno_dir: Root directory containing DSNO files.
         progress_callback: Optional ``(event, data_dict)`` callable for
             real-time progress updates consumed by the GUI dashboard.
+        cancel_event: Optional threading.Event to abort the operation.
 
     Returns:
         A :class:`ProcessingResult` with counts and error details.
@@ -123,6 +125,11 @@ def process_dsno(
     _cb("total", {"count": len(pairs)})
 
     for invoice, dsno_filename in pairs:
+        if cancel_event and cancel_event.is_set():
+            log.info("Processing cancelled by user.")
+            _cb("cancelled", {"name": "System", "detail": "Cancelled by user"})
+            raise CanceledError("Cancelled by user")
+
         dsno_path = base_dir / dsno_filename
         _cb("phase", {"text": f"Processing {dsno_path.name}..."})
         log.info("---- Processing DSNO: %s ----", dsno_path.name)
