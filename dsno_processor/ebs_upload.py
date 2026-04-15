@@ -20,6 +20,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.common.exceptions import StaleElementReferenceException
 
 from .exceptions import ConfigurationError, CanceledError, LoginError
 
@@ -281,17 +282,34 @@ def perform_upload(
         select.select_by_index(folder_index)
         time.sleep(2)
 
-        # 2. Set file path in the file input
-        input_file = wait.until(
-            EC.presence_of_element_located((By.ID, "FileData_oafileUpload"))
-        )
-        input_file.send_keys(file_path)
+        # 2. Set file path in the file input (with retry for stale elements)
+        for attempt in range(3):
+            try:
+                input_file = wait.until(
+                    EC.presence_of_element_located((By.ID, "FileData_oafileUpload"))
+                )
+                input_file.send_keys(file_path)
+                break
+            except StaleElementReferenceException:
+                if attempt == 2: raise
+                time.sleep(1)
+                continue
+        
         time.sleep(2)
 
-        # 3. Click Upload button
-        button = wait.until(EC.element_to_be_clickable((By.ID, "Upload")))
-        button.click()
+        # 3. Click Upload button (with retry for stale elements)
+        for attempt in range(3):
+            try:
+                button = wait.until(EC.element_to_be_clickable((By.ID, "Upload")))
+                button.click()
+                break
+            except StaleElementReferenceException:
+                if attempt == 2: raise
+                time.sleep(1)
+                continue
+        
         time.sleep(4)
+
 
         return True
     except Exception as e:

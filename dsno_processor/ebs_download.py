@@ -22,6 +22,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.common.exceptions import StaleElementReferenceException
 
 from .exceptions import ConfigurationError, CanceledError, LoginError
 
@@ -371,25 +372,25 @@ def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir
         user_agent = driver.execute_script("return navigator.userAgent")
         session.headers.update({"User-Agent": user_agent})
         
-        # 3. Extract form data from the current page
-        # Oracle EBS forms usually name 'DefaultFormName'
-        form = driver.find_element(By.NAME, "DefaultFormName")
-        inputs = form.find_elements(By.TAG_NAME, "input")
+        # 3. Extract form data from the current page using JavaScript
+        # This is atomic on the browser side and avoids StaleElementReferenceException
+        # that often happens when scraping dynamic Oracle EBS forms manually.
+        data = driver.execute_script("""
+            var form = document.forms['DefaultFormName'];
+            if (!form) return null;
+            var data = {};
+            for (var i = 0; i < form.elements.length; i++) {
+                var el = form.elements[i];
+                if (el.name) {
+                    data[el.name] = el.value;
+                }
+            }
+            return data;
+        """)
         
-        data = {}
-        for inp in inputs:
-            name = inp.get_attribute("name")
-            val = inp.get_attribute("value") or ""
-            if name:
-                data[name] = val
-                
-        # 4. Handle Select fields (like FilePath)
-        selects = form.find_elements(By.TAG_NAME, "select")
-        for sel_el in selects:
-            sel_name = sel_el.get_attribute("name")
-            if sel_name:
-                select_obj = Select(sel_el)
-                data[sel_name] = select_obj.first_selected_option.get_attribute("value")
+        if not data:
+            logger.warning("     Form 'DefaultFormName' not found on current page.")
+            return False
                 
         # 5. Inject/Override parameters for the Download event
         # This simulates the JS call: submitForm('DefaultFormName',1,{event:'Download',source:'Download'});
@@ -439,12 +440,38 @@ def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir
 def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_event=None):
     """Try to download a file from the current folder."""
     try:
-        field = wait.until(EC.element_to_be_clickable((By.ID, "FileName")))
-        field.clear()
-        field.send_keys(filename)
+        # Wrap the primary input interaction in a retry loop to handle 
+        # StaleElementReferenceException, which often happens in EBS 
+        # when the page is still "settling" after a folder selection.
+        field = None
+        for attempt in range(3):
+            try:
+                field = wait.until(EC.element_to_be_clickable((By.ID, "FileName")))
+                field.clear()
+                field.send_keys(filename)
+                # Confirm text was actually entered
+                if field.get_attribute("value") == filename:
+                    break
+            except StaleElementReferenceException:
+                if attempt == 2: raise
+                time.sleep(1)
+                continue
+        
         time.sleep(5)
-        field.send_keys(Keys.TAB)
+        
+        # TAB might also need protection
+        for attempt in range(3):
+            try:
+                field = driver.find_element(By.ID, "FileName")
+                field.send_keys(Keys.TAB)
+                break
+            except StaleElementReferenceException:
+                if attempt == 2: raise
+                time.sleep(1)
+                continue
+                
         time.sleep(2)
+
 
         # 1. Check for EBS LOV/Popup (indicates file not found uniquely)
         popup_identifiers = [
@@ -463,7 +490,12 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
                         driver.execute_script("document.getElementById('closeAnchorlovPopUp_FileName')?.click();")
                     except: pass
                     return False
-            except: pass
+            except Exception as e:
+                # If element becomes stale during checking, it likely means the page 
+                # is refreshing/changing, which is fine to ignore in this detection loop.
+                if "stale" in str(e).lower():
+                    continue
+                pass
 
         # 3. Use requests to download (reusing cookies and form state)
         if _download_via_requests(driver, filename, config.download_dir):
