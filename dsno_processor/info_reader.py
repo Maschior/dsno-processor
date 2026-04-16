@@ -9,13 +9,32 @@ import pandas as pd
 
 from .exceptions import ColumnMissingError, SheetNotFoundError
 from .models import DsnoInfo
+from .config import load_config
 
 log = logging.getLogger(__name__)
 
-_INVOICE_COL = "Invoice"
-_CONTAINER_COL = "Container"
+cfg = load_config()
+_INVOICE_COL = cfg.INVOICE_COL
+_CONTAINER_COL = cfg.CONTAINER_COL
 _BOOKING_COL = "Booking/HAWB"
+_STATUS_COL = "Status"
 _REQUIRED_COLUMNS = {_INVOICE_COL, _CONTAINER_COL, _BOOKING_COL}
+
+
+def get_status_options() -> list[str]:
+    """Get status options for filtering."""
+    
+    def get_status_options(control_sheet_path: Path | str) -> list[str]:
+    """Get status options for filtering."""
+    path = Path(control_sheet_path)
+    if not path.exists():
+        return []
+
+    df = get_sheet_dataframe(control_sheet_path, {_STATUS_COL})
+    return df[_STATUS_COL].unique().tolist()
+    
+
+    return ["All", "Downloaded", "Processed", "Error"]
 
 
 def get_dsno_info(invoice: int, customer_sheet_path: Path | str) -> DsnoInfo | None:

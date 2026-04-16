@@ -29,3 +29,6 @@ class LoginError(DsnoProcessorError):
 
 class CanceledError(DsnoProcessorError):
     """Raised when the operation is canceled by the user."""
+
+class DsnoProcessorError(DsnoProcessorError):
+    """Raised when the operation is canceled by the user."""

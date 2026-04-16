@@ -44,7 +44,7 @@ def _process_single_dsno(
     """Process one DSNO file. Returns an error message on failure, else ``None``."""
     try:
         info = get_dsno_info(invoice=invoice, customer_sheet_path=customer_sheet_path)
-
+        
         if info is None:
             return f"Invoice {invoice} not found in customer sheet."
 

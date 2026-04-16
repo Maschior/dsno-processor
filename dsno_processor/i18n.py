@@ -73,6 +73,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.control_sheet": "Control Sheet:",
         "proc.dsno_directory": "DSNO Directory:",
         "proc.start_btn": "Start Processing",
+        "proc.filter_by_status": "Filter by Status:",
 
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Period",
@@ -252,6 +253,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.control_sheet": "Planilha de Controle:",
         "proc.dsno_directory": "Diretório DSNO:",
         "proc.start_btn": "Iniciar Processamento",
+        "proc.filter_by_status": "Filtrar por Status:",
 
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Período",

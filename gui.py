@@ -41,6 +41,7 @@ from dsno_processor.ebs_download import DownloadConfig, run_download
 from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import ConfigurationError, CanceledError, LoginError
 from dsno_processor.i18n import t, set_language, SUPPORTED_LANGUAGES
+from dsno_processor.info_reader import get_status_options
 
 # ── Appearance ────────────────────────────────────────────────────────
 ctk.set_appearance_mode("dark")
@@ -1234,6 +1235,23 @@ class DSNOApp(ctk.CTk):
             browse_command=self._browse_dsno_dir,
         )
         self.dsno_row.pack(fill="x", pady=4)
+
+        # Status filter
+        status_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        status_frame.pack(fill="x", pady=(8, 4))
+        ctk.CTkLabel(
+            status_frame,
+            text=t("proc.status"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
+            width=130,
+            anchor="w",
+        ).pack(side="left")
+        self.filter_by_status = ctk.CTkComboBox(
+            status_frame,
+            values= ["All"] + get_status_options(self.control_row.get()),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        )
+        self.filter_by_status.pack(padx=(0, 4))
 
         # Run buttons container
         btn_frame = ctk.CTkFrame(tab, fg_color="transparent")

@@ -54,6 +54,8 @@ class ProcessorConfig:
     """Settings that control the DSNO processing behaviour."""
 
     valid_statuses: list[str] = field(default_factory=lambda: ["downloaded"])
+    invoice_col: str = "Invoice"
+    
 
 
 @dataclass
