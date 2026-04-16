@@ -7,29 +7,27 @@ control_sheet = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\Control ASN Navis
 customer_sheet = "."
 customer_sheet_pre_path = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR"
 
-[processor]
-valid_statuses = [
-    "Downloaded",
-]
+# CUSTOMER SHEET
+[customer_sheet.cols]
+invoice = "Invoice"
+booking = "Booking/HAWB"
+container = "Container"
 
 [ebs]
 download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
 upload_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
 download_dir = "C:\\Users\\$USER\\edi-process"
 upload_dir = "C:\\Users\\$USER\\edi-process\\Processed"
-headless = true
+headless = false
 
-[ebs.columns]
+[control_sheet.cols]
+invoice = "INVOICE"
 dsno = "ARGUMENT2"
 date = "CREATION_DATE"
 status = "STATUS"
 
 [ebs.folders]
-download_indices = [
-    92,
-    95,
-    101,
-]
+download_indices = [92, 95, 101]
 upload_index = 92
 
 [credentials]

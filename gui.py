@@ -28,12 +28,13 @@ def get_asset_path(relative_path: str) -> str:
 from dsno_processor import process_dsno
 from dsno_processor.config import (
     AppConfig,
+    ControlSheetColsConfig,
+    CustomerSheetColsConfig,
     CredentialsConfig,
-    EbsColumnsConfig,
     EbsConfig,
     EbsFoldersConfig,
+    GeneralConfig,
     PathsConfig,
-    ProcessorConfig,
     load_config,
     save_config,
 )
@@ -1248,7 +1249,7 @@ class DSNOApp(ctk.CTk):
         ).pack(side="left")
         self.filter_by_status = ctk.CTkComboBox(
             status_frame,
-            values= ["All"] + get_status_options(self.control_row.get()),
+            values=["All"] + get_status_options(self.control_row.get()),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         )
         self.filter_by_status.pack(padx=(0, 4))
@@ -2018,16 +2019,6 @@ class SettingsWindow(ctk.CTkToplevel):
             t("settings.processor.hint"),
         )
 
-        self._add_text_field(
-            form, 1, t("settings.processor.valid_statuses"), "processor_valid_statuses",
-            ", ".join(
-                s.capitalize()
-                for s in cfg.processor.valid_statuses
-            )
-            if cfg
-            else "Downloaded",
-            hint=t("settings.processor.valid_statuses_hint"),
-        )
 
     def _build_tab_ebs(self, cfg) -> None:
         tab = self._tabview.tab(t("settings.tab.ebs"))
@@ -2343,7 +2334,6 @@ class SettingsWindow(ctk.CTkToplevel):
     def _save(self) -> None:
         """Build an AppConfig from the form fields and persist to disk."""
         from pathlib import Path as _Path
-        from dsno_processor.config import GeneralConfig
 
         try:
             folder_indices = [
@@ -2359,10 +2349,6 @@ class SettingsWindow(ctk.CTkToplevel):
         except ValueError:
             upload_folder_index = 92
 
-        valid_raw = self._vars["processor_valid_statuses"].get()
-        valid_statuses = [
-            s.strip().lower() for s in valid_raw.split(",") if s.strip()
-        ]
 
         selected_display = getattr(self, "language_var", tk.StringVar(value="English")).get()
         selected_code = "en"
@@ -2381,18 +2367,23 @@ class SettingsWindow(ctk.CTkToplevel):
                     self._vars["customer_sheet_pre_path"].get()
                 ),
             ),
-            processor=ProcessorConfig(valid_statuses=valid_statuses),
+            control_sheet_cols=ControlSheetColsConfig(
+                invoice=self._vars["ebs_col_invoice"].get(),
+                dsno=self._vars["ebs_col_dsno"].get(),
+                date=self._vars["ebs_col_date"].get(),
+                status=self._vars["ebs_col_status"].get(),
+            ),
+            customer_sheet_cols=CustomerSheetColsConfig(
+                invoice=self._vars.get("cust_col_invoice", tk.StringVar(value="Invoice")).get(),
+                booking=self._vars.get("cust_col_booking", tk.StringVar(value="Booking/HAWB")).get(),
+                container=self._vars.get("cust_col_container", tk.StringVar(value="Container")).get(),
+            ),
             ebs=EbsConfig(
                 download_url=self._vars["ebs_download_url"].get(),
                 upload_url=self._vars["ebs_upload_url"].get(),
                 download_dir=_Path(self._vars["download_dir"].get()),
                 upload_dir=_Path(self._vars["upload_dir"].get()),
                 headless=self._headless_var.get(),
-                columns=EbsColumnsConfig(
-                    dsno=self._vars["ebs_col_dsno"].get(),
-                    date=self._vars["ebs_col_date"].get(),
-                    status=self._vars["ebs_col_status"].get(),
-                ),
                 folders=EbsFoldersConfig(
                     download_indices=folder_indices,
                     upload_index=upload_folder_index,

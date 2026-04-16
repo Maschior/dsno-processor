@@ -73,7 +73,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.control_sheet": "Control Sheet:",
         "proc.dsno_directory": "DSNO Directory:",
         "proc.start_btn": "Start Processing",
-        "proc.filter_by_status": "Filter by Status:",
+        "proc.status": "Filter by Status:",
 
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Period",
@@ -163,8 +163,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Settings that control the processing behaviour.",
-        "settings.processor.valid_statuses": "Valid Statuses:",
-        "settings.processor.valid_statuses_hint": "Separate multiple values with commas (e.g. Downloaded, New).",
 
         # ── Settings: EBS ───────────────────────────────────────
         "settings.ebs.hint": "Oracle EBS URLs and directories for download and upload.",
@@ -253,7 +251,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.control_sheet": "Planilha de Controle:",
         "proc.dsno_directory": "Diretório DSNO:",
         "proc.start_btn": "Iniciar Processamento",
-        "proc.filter_by_status": "Filtrar por Status:",
+        "proc.status": "Filtrar por Status:",
 
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Período",
@@ -343,8 +341,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Configurações que controlam o comportamento do processamento.",
-        "settings.processor.valid_statuses": "Status Válidos:",
-        "settings.processor.valid_statuses_hint": "Separe múltiplos valores por vírgula (ex: Downloaded, New).",
 
         # ── Settings: EBS ───────────────────────────────────────
         "settings.ebs.hint": "URLs e diretórios do Oracle EBS para download e upload.",

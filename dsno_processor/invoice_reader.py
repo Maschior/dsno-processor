@@ -42,12 +42,6 @@ def get_invoice_dsno_pairs(
             f"Control ASN Navistar sheet not found at: {path}"
         )
 
-    try:
-        app_config = load_config()
-        valid_statuses = app_config.processor_valid_statuses
-    except Exception as e:
-        log.warning("Failed to load config, defaulting to 'downloaded': %s", e)
-        valid_statuses = ["downloaded"]
 
     df = pd.read_excel(path)
 
@@ -61,16 +55,7 @@ def get_invoice_dsno_pairs(
 
     date_mask = (df[_DATE_COL] >= date_range.start) & (df[_DATE_COL] <= date_range.end)
     
-    # Status filter: Only process allowed statuses or empty status
-    status_series = df[_STATUS_COL].astype(str).str.strip().str.lower()
-    status_mask = (
-        df[_STATUS_COL].isna()
-        | (status_series.isin(valid_statuses))
-        | (status_series == "")
-        | (status_series == "nan")
-    )
-    
-    mask = date_mask & status_mask
+    mask = date_mask
     df_filtered = df.loc[mask].dropna(subset=[_INVOICE_COL, _DSNO_COL])
 
     invoices = df_filtered[_INVOICE_COL].astype("Int64").tolist()

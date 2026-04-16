@@ -14,27 +14,31 @@ from .config import load_config
 log = logging.getLogger(__name__)
 
 cfg = load_config()
+# Customer sheet columns
 _INVOICE_COL = cfg.INVOICE_COL
 _CONTAINER_COL = cfg.CONTAINER_COL
-_BOOKING_COL = "Booking/HAWB"
-_STATUS_COL = "Status"
+_BOOKING_COL = cfg.BOOKING_COL
+
+# Control sheet columns
+_STATUS_COL = cfg.STATUS_COL
+
+# Required columns
 _REQUIRED_COLUMNS = {_INVOICE_COL, _CONTAINER_COL, _BOOKING_COL}
 
-
-def get_status_options() -> list[str]:
-    """Get status options for filtering."""
-    
-    def get_status_options(control_sheet_path: Path | str) -> list[str]:
+def get_status_options(control_sheet_path: Path | str) -> list[str]:
     """Get status options for filtering."""
     path = Path(control_sheet_path)
     if not path.exists():
         return []
 
-    df = get_sheet_dataframe(control_sheet_path, {_STATUS_COL})
-    return df[_STATUS_COL].unique().tolist()
-    
+    try:
+        df = pd.read_excel(path, usecols=[_STATUS_COL])
+        values = sorted(df[_STATUS_COL].dropna().unique().tolist())
+        return values if len(values) > 1 else []
+    except Exception as exc:
+        log.warning("Could not read status options from sheet: %s", exc)
+        return []
 
-    return ["All", "Downloaded", "Processed", "Error"]
 
 
 def get_dsno_info(invoice: int, customer_sheet_path: Path | str) -> DsnoInfo | None:

@@ -50,21 +50,22 @@ class PathsConfig:
 
 
 @dataclass
-class ProcessorConfig:
-    """Settings that control the DSNO processing behaviour."""
+class ControlSheetColsConfig:
+    """Column names used when reading the Control spreadsheet."""
 
-    valid_statuses: list[str] = field(default_factory=lambda: ["downloaded"])
-    invoice_col: str = "Invoice"
-    
-
-
-@dataclass
-class EbsColumnsConfig:
-    """Column names used when reading the EBS spreadsheet."""
-
+    invoice: str = "INVOICE"
     dsno: str = "ARGUMENT2"
     date: str = "CREATION_DATE"
     status: str = "STATUS"
+
+
+@dataclass
+class CustomerSheetColsConfig:
+    """Column names used when reading the Customer spreadsheet."""
+
+    invoice: str = "Invoice"
+    booking: str = "Booking/HAWB"
+    container: str = "Container"
 
 
 @dataclass
@@ -84,7 +85,6 @@ class EbsConfig:
     download_dir: Path = field(default_factory=Path)
     upload_dir: Path = field(default_factory=Path)
     headless: bool = False
-    columns: EbsColumnsConfig = field(default_factory=EbsColumnsConfig)
     folders: EbsFoldersConfig = field(default_factory=EbsFoldersConfig)
 
 
@@ -112,7 +112,12 @@ class AppConfig:
 
     general: GeneralConfig = field(default_factory=GeneralConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
-    processor: ProcessorConfig = field(default_factory=ProcessorConfig)
+    control_sheet_cols: ControlSheetColsConfig = field(
+        default_factory=ControlSheetColsConfig
+    )
+    customer_sheet_cols: CustomerSheetColsConfig = field(
+        default_factory=CustomerSheetColsConfig
+    )
     ebs: EbsConfig = field(default_factory=EbsConfig)
     credentials: CredentialsConfig = field(default_factory=CredentialsConfig)
 
@@ -144,8 +149,39 @@ class AppConfig:
         return self.paths.customer_sheet_pre_path
 
     @property
-    def processor_valid_statuses(self) -> list[str]:
-        return self.processor.valid_statuses
+    def INVOICE_COL(self) -> str:
+        """Column name for invoice number in the customer sheet."""
+        return self.customer_sheet_cols.invoice
+
+    @property
+    def BOOKING_COL(self) -> str:
+        """Column name for booking/HAWB in the customer sheet."""
+        return self.customer_sheet_cols.booking
+
+    @property
+    def CONTAINER_COL(self) -> str:
+        """Column name for container in the customer sheet."""
+        return self.customer_sheet_cols.container
+
+    @property
+    def CONTROL_INVOICE_COL(self) -> str:
+        """Column name for invoice number in the control sheet."""
+        return self.control_sheet_cols.invoice
+
+    @property
+    def DSNO_COL(self) -> str:
+        """Column name for DSNO in the control sheet."""
+        return self.control_sheet_cols.dsno
+
+    @property
+    def DATE_COL(self) -> str:
+        """Column name for date in the control sheet."""
+        return self.control_sheet_cols.date
+
+    @property
+    def STATUS_COL(self) -> str:
+        """Column name for status in the control sheet."""
+        return self.control_sheet_cols.status
 
     @property
     def ebs_download_url(self) -> str:
@@ -163,17 +199,18 @@ class AppConfig:
     def upload_dir(self) -> Path:
         return self.ebs.upload_dir
 
+    # Aliases used by ebs_download.py / ebs_upload.py / gui.py
     @property
     def ebs_dsno_col(self) -> str:
-        return self.ebs.columns.dsno
+        return self.control_sheet_cols.dsno
 
     @property
     def ebs_date_col(self) -> str:
-        return self.ebs.columns.date
+        return self.control_sheet_cols.date
 
     @property
     def ebs_status_col(self) -> str:
-        return self.ebs.columns.status
+        return self.control_sheet_cols.status
 
     @property
     def ebs_folder_indices(self) -> list[int]:
@@ -215,10 +252,20 @@ def _config_to_dict(config: AppConfig) -> dict:
             "customer_sheet": str(config.paths.customer_sheet),
             "customer_sheet_pre_path": str(config.paths.customer_sheet_pre_path),
         },
-        "processor": {
-            "valid_statuses": [
-                s.capitalize() for s in config.processor.valid_statuses
-            ],
+        "customer_sheet": {
+            "cols": {
+                "invoice": config.customer_sheet_cols.invoice,
+                "booking": config.customer_sheet_cols.booking,
+                "container": config.customer_sheet_cols.container,
+            },
+        },
+        "control_sheet": {
+            "cols": {
+                "invoice": config.control_sheet_cols.invoice,
+                "dsno": config.control_sheet_cols.dsno,
+                "date": config.control_sheet_cols.date,
+                "status": config.control_sheet_cols.status,
+            },
         },
         "ebs": {
             "download_url": config.ebs.download_url,
@@ -226,11 +273,6 @@ def _config_to_dict(config: AppConfig) -> dict:
             "download_dir": str(config.ebs.download_dir),
             "upload_dir": str(config.ebs.upload_dir),
             "headless": config.ebs.headless,
-            "columns": {
-                "dsno": config.ebs.columns.dsno,
-                "date": config.ebs.columns.date,
-                "status": config.ebs.columns.status,
-            },
             "folders": {
                 "download_indices": config.ebs.folders.download_indices,
                 "upload_index": config.ebs.folders.upload_index,
@@ -247,15 +289,14 @@ def _dict_to_config(data: dict) -> AppConfig:
     """Build an :class:`AppConfig` from a parsed TOML dict."""
     gen_d = data.get("general", {})
     paths_d = data.get("paths", {})
-    proc_d = data.get("processor", {})
+    cust_sheet_d = data.get("customer_sheet", {})
+    cust_cols_d = cust_sheet_d.get("cols", {})
+    ctrl_sheet_d = data.get("control_sheet", {})
+    ctrl_cols_d = ctrl_sheet_d.get("cols", {})
     ebs_d = data.get("ebs", {})
-    cols_d = ebs_d.get("columns", {})
-    # Backward compat: accept both "folders" (new) and "pastas" (legacy)
+
     folders_d = ebs_d.get("folders", ebs_d.get("pastas", {}))
     cred_d = data.get("credentials", {})
-
-    valid_raw = proc_d.get("valid_statuses", ["Downloaded"])
-    valid_statuses = [s.strip().lower() for s in valid_raw if s.strip()]
 
     return AppConfig(
         general=GeneralConfig(
@@ -269,23 +310,27 @@ def _dict_to_config(data: dict) -> AppConfig:
                 paths_d.get("customer_sheet_pre_path", "")
             ),
         ),
-        processor=ProcessorConfig(valid_statuses=valid_statuses),
+        control_sheet_cols=ControlSheetColsConfig(
+            invoice=ctrl_cols_d.get("invoice", "INVOICE"),
+            dsno=ctrl_cols_d.get("dsno", "ARGUMENT2"),
+            date=ctrl_cols_d.get("date", "CREATION_DATE"),
+            status=ctrl_cols_d.get("status", "STATUS"),
+        ),
+        customer_sheet_cols=CustomerSheetColsConfig(
+            invoice=cust_cols_d.get("invoice", "Invoice"),
+            booking=cust_cols_d.get("booking", "Booking/HAWB"),
+            container=cust_cols_d.get("container", "Container"),
+        ),
         ebs=EbsConfig(
             download_url=ebs_d.get("download_url", ""),
             upload_url=ebs_d.get("upload_url", ""),
             download_dir=Path(ebs_d.get("download_dir", "")),
             upload_dir=Path(ebs_d.get("upload_dir", "")),
             headless=ebs_d.get("headless", False),
-            columns=EbsColumnsConfig(
-                dsno=cols_d.get("dsno", "ARGUMENT2"),
-                date=cols_d.get("date", "CREATION_DATE"),
-                status=cols_d.get("status", "STATUS"),
-            ),
             folders=EbsFoldersConfig(
                 download_indices=folders_d.get(
                     "download_indices", [92, 95, 101]
                 ),
-                # Backward compat: accept "upload_index" or "upload_indice"
                 upload_index=folders_d.get(
                     "upload_index",
                     folders_d.get("upload_indice", 92),
@@ -325,10 +370,6 @@ def _migrate_ini_to_toml(
         int(x.strip()) for x in folder_indices_raw.split(",") if x.strip()
     ]
 
-    valid_raw = paths_sec.get("PROCESSOR_VALID_STATUSES", "Downloaded")
-    valid_statuses = [
-        x.strip().lower() for x in valid_raw.split(",") if x.strip()
-    ]
 
     config = AppConfig(
         general=GeneralConfig(
@@ -342,17 +383,22 @@ def _migrate_ini_to_toml(
                 paths_sec.get("CUSTOMER_SHEET_PRE_PATH", "")
             ),
         ),
-        processor=ProcessorConfig(valid_statuses=valid_statuses),
+        control_sheet_cols=ControlSheetColsConfig(
+            invoice="INVOICE",
+            dsno=ebs_sec.get("DSNO_COL", "ARGUMENT2"),
+            date=ebs_sec.get("DATE_COL", "CREATION_DATE"),
+            status=ebs_sec.get("STATUS_COL", "STATUS"),
+        ),
+        customer_sheet_cols=CustomerSheetColsConfig(
+            invoice="Invoice",
+            booking="Booking/HAWB",
+            container="Container",
+        ),
         ebs=EbsConfig(
             download_url=ebs_sec.get("EBS_DOWNLOAD_URL", ""),
             upload_url=ebs_sec.get("EBS_UPLOAD_URL", ""),
             download_dir=Path(ebs_sec.get("DOWNLOAD_DIR", "")),
             upload_dir=Path(ebs_sec.get("UPLOAD_DIR", "")),
-            columns=EbsColumnsConfig(
-                dsno=ebs_sec.get("DSNO_COL", "ARGUMENT2"),
-                date=ebs_sec.get("DATE_COL", "CREATION_DATE"),
-                status=ebs_sec.get("STATUS_COL", "STATUS"),
-            ),
             folders=EbsFoldersConfig(
                 download_indices=folder_indices,
                 upload_index=int(
