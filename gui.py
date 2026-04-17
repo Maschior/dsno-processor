@@ -70,6 +70,166 @@ def add_placeholder(entry, placeholder_text):
     entry.bind("<FocusIn>", on_focus_in)
     entry.bind("<FocusOut>", on_focus_out)
 
+# ── Multi-select dropdown ───────────────────────────────────────────
+class MultiSelectDropdown(ctk.CTkFrame):
+    """A button that opens a popup with checkboxes for multi-select."""
+
+    def __init__(self, master, options: list[str], placeholder: str = "All", **kwargs) -> None:
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self._options_list = options
+        self._placeholder = placeholder
+        self._vars: dict[str, tk.BooleanVar] = {}
+        self._popup: tk.Toplevel | None = None
+
+        self._btn = ctk.CTkButton(
+            self,
+            text=placeholder,
+            width=160,
+            height=28,
+            corner_radius=6,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            anchor="w",
+            command=self._toggle_popup,
+        )
+        self._btn.pack()
+
+    def set_options(self, options: list[str]) -> None:
+        self._options_list = options
+        self._vars = {}
+        self._update_label()
+
+    def _toggle_popup(self) -> None:
+        if self._popup and self._popup.winfo_exists():
+            self._popup.destroy()
+            self._popup = None
+            return
+        self._open_popup()
+
+    def _open_popup(self) -> None:
+        popup = tk.Toplevel(self)
+        popup.overrideredirect(True)
+        popup.attributes("-topmost", True)
+        self._popup = popup
+
+        # Position below button
+        self.update_idletasks()
+        bx = self._btn.winfo_rootx()
+        by = self._btn.winfo_rooty() + self._btn.winfo_height() + 2
+        popup.geometry(f"+{bx}+{by}")
+
+        # Styling based on appearance mode
+        mode = ctk.get_appearance_mode().lower()
+        bg = "#1c1c1e" if mode == "dark" else "#f0f0f0"
+        fg = "white" if mode == "dark" else "black"
+        check_bg = "#2c2c2e" if mode == "dark" else "#e0e0e0"
+        hover_bg = "#3a3a3c" if mode == "dark" else "#d0d0d0"
+        border_color = "#444" if mode == "dark" else "#bbb"
+
+        frame = tk.Frame(
+            popup, bg=bg,
+            relief="flat",
+            bd=1,
+            highlightthickness=1,
+            highlightbackground=border_color,
+        )
+        frame.pack(fill="both", expand=True)
+
+        if not self._options_list:
+            tk.Label(
+                frame, text="No options available", bg=bg, fg="gray",
+                font=(_FONT_FAMILY, 10), padx=10, pady=6,
+            ).pack(fill="x")
+        else:
+            for opt in self._options_list:
+                var = self._vars.setdefault(opt, tk.BooleanVar(value=False))
+                row = tk.Frame(frame, bg=bg, cursor="hand2")
+                row.pack(fill="x", padx=4, pady=1)
+
+                cb = tk.Checkbutton(
+                    row, text=opt, variable=var,
+                    bg=bg, fg=fg, selectcolor=check_bg,
+                    activebackground=hover_bg, activeforeground=fg,
+                    font=(_FONT_FAMILY, 11),
+                    anchor="w",
+                    relief="flat",
+                    bd=0,
+                    padx=6, pady=4,
+                    command=self._update_label,
+                )
+                cb.pack(fill="x")
+
+            # Separator + Clear/All buttons
+            sep = tk.Frame(frame, bg=border_color, height=1)
+            sep.pack(fill="x", padx=4, pady=(4, 0))
+
+            btn_row = tk.Frame(frame, bg=bg)
+            btn_row.pack(fill="x", padx=4, pady=4)
+
+            def _make_action_btn(parent, text, cmd, side="left"):
+                b = tk.Label(
+                    parent, text=text, bg=check_bg, fg=fg,
+                    font=(_FONT_FAMILY, 10), padx=8, pady=3,
+                    cursor="hand2", relief="flat",
+                )
+                b.pack(side=side, padx=2)
+                b.bind("<Button-1>", cmd)
+                b.bind("<Enter>", lambda e: b.configure(bg=hover_bg))
+                b.bind("<Leave>", lambda e: b.configure(bg=check_bg))
+                return b
+
+            _make_action_btn(btn_row, "All", lambda e: self._check_all())
+            _make_action_btn(btn_row, "Clear", lambda e: self._check_none())
+
+        # Close when clicking outside
+        popup.bind("<FocusOut>", lambda e: self._close_popup_if_outside(e))
+        popup.focus_set()
+
+    def _close_popup_if_outside(self, event) -> None:
+        try:
+            wx, wy = event.widget.winfo_rootx(), event.widget.winfo_rooty()
+            _ = wx + wy  # just ensure it exists
+        except Exception:
+            pass
+        # Delay check so clicks on child widgets register first
+        self.after(100, self._maybe_close_popup)
+
+    def _maybe_close_popup(self) -> None:
+        if self._popup and self._popup.winfo_exists():
+            try:
+                focused = self._popup.focus_get()
+                if focused is None:
+                    self._popup.destroy()
+                    self._popup = None
+            except Exception:
+                pass
+
+    def _check_all(self) -> None:
+        for var in self._vars.values():
+            var.set(True)
+        self._update_label()
+
+    def _check_none(self) -> None:
+        for var in self._vars.values():
+            var.set(False)
+        self._update_label()
+
+    def _update_label(self) -> None:
+        selected = self.get_selected()
+        if not selected:
+            self._btn.configure(text=self._placeholder)
+        elif len(selected) == len(self._options_list) and self._options_list:
+            self._btn.configure(text="All")
+        else:
+            label = ", ".join(selected)
+            if len(label) > 22:
+                label = f"{len(selected)} selected"
+            self._btn.configure(text=label)
+
+    def get_selected(self) -> list[str]:
+        """Return list of checked options; empty list means 'All'."""
+        return [opt for opt, var in self._vars.items() if var.get()]
+
+
 # ── Logging handler ──────────────────────────────────────────────────
 class _DashboardLogHandler(logging.Handler):
     """Route log records to a CTkTextbox inside a ProgressDashboard."""
@@ -1210,7 +1370,21 @@ class DSNOApp(ctk.CTk):
         self.start_date = DateInput(date_frame, label=t("proc.start"), prefill_today=True)
         self.start_date.pack(side="left", padx=(0, 20))
         self.end_date = DateInput(date_frame, label=t("proc.end"), prefill_today=True)
-        self.end_date.pack(side="left")
+        self.end_date.pack(side="left", padx=(0, 20))
+
+        # Status filter (inline with date range) — multi-select
+        ctk.CTkLabel(
+            date_frame,
+            text=t("proc.status"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
+            anchor="w",
+        ).pack(side="left", padx=(0, 6))
+        self.filter_by_status = MultiSelectDropdown(
+            date_frame,
+            options=get_status_options(default_control),
+            placeholder="All",
+        )
+        self.filter_by_status.pack(side="left")
 
         # File pickers
         self.customer_row = FilePickerRow(
@@ -1236,23 +1410,6 @@ class DSNOApp(ctk.CTk):
             browse_command=self._browse_dsno_dir,
         )
         self.dsno_row.pack(fill="x", pady=4)
-
-        # Status filter
-        status_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        status_frame.pack(fill="x", pady=(8, 4))
-        ctk.CTkLabel(
-            status_frame,
-            text=t("proc.status"),
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
-            width=130,
-            anchor="w",
-        ).pack(side="left")
-        self.filter_by_status = ctk.CTkComboBox(
-            status_frame,
-            values=["All"] + get_status_options(self.control_row.get()),
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-        )
-        self.filter_by_status.pack(padx=(0, 4))
 
         # Run buttons container
         btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
@@ -1607,12 +1764,14 @@ class DSNOApp(ctk.CTk):
     def _process_thread(self) -> None:
         try:
             date_range = f"{self.start_date.get()};{self.end_date.get()}"
+            status_filter = self.filter_by_status.get_selected()  # [] means All
             result = process_dsno(
                 date_range=date_range,
                 customer_sheet=self.customer_row.get(),
                 control_sheet=self.control_row.get(),
                 dsno_dir=self.dsno_row.get(),
                 progress_callback=self._make_progress_callback(),
+                status_filter=status_filter,
             )
 
             summary = t("msg.processing_complete", success=result.success, total=result.total)

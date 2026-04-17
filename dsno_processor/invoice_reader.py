@@ -23,12 +23,14 @@ _STATUS_COL = "STATUS"
 def get_invoice_dsno_pairs(
     date_range: DateRange,
     control_sheet_path: Path | str,
+    status_filter: list[str] | None = None,
 ) -> list[tuple[int, str]]:
     """Return a list of ``(invoice, dsno_filename)`` pairs within *date_range*.
 
     Args:
         date_range: The :class:`DateRange` to filter by.
         control_sheet_path: Path to the Excel control sheet.
+        status_filter: Optional status to filter by. If "All", processes all allowed statuses.
 
     Returns:
         List of ``(invoice_number, dsno_filename)`` tuples.
@@ -42,7 +44,6 @@ def get_invoice_dsno_pairs(
             f"Control ASN Navistar sheet not found at: {path}"
         )
 
-
     df = pd.read_excel(path)
 
     # Ensure STATUS column exists so we don't get KeyError
@@ -55,7 +56,27 @@ def get_invoice_dsno_pairs(
 
     date_mask = (df[_DATE_COL] >= date_range.start) & (df[_DATE_COL] <= date_range.end)
     
-    mask = date_mask
+    has_status_filter = False
+    if status_filter is not None and len(status_filter) > 0:
+        if not isinstance(status_filter[0], str):
+            raise ValueError("status_filter item must be a string")
+        status_filter = [s.lower().strip() for s in status_filter]
+
+        # Status filter: Only process allowed statuses or empty statuses
+        status_series = df[_STATUS_COL].astype(str).str.strip().str.lower()
+        status_mask = (
+            df[_STATUS_COL].isna()
+            | (status_series.isin(status_filter))
+            | (status_series == "")
+            | (status_series == "nan")
+        )
+        has_status_filter = True
+
+    if has_status_filter:
+        mask = date_mask & status_mask
+    else:
+        mask = date_mask
+    
     df_filtered = df.loc[mask].dropna(subset=[_INVOICE_COL, _DSNO_COL])
 
     invoices = df_filtered[_INVOICE_COL].astype("Int64").tolist()

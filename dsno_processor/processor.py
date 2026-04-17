@@ -82,6 +82,7 @@ def process_dsno(
     dsno_dir: str,
     progress_callback=None,
     cancel_event=None,
+    status_filter: list[str] | None = None,
 ) -> ProcessingResult:
     """Run a full DSNO processing batch.
 
@@ -96,6 +97,8 @@ def process_dsno(
         progress_callback: Optional ``(event, data_dict)`` callable for
             real-time progress updates consumed by the GUI dashboard.
         cancel_event: Optional threading.Event to abort the operation.
+        status_filter: Optional list of status values to include.
+            An empty list or ``None`` means no filter (all statuses).
 
     Returns:
         A :class:`ProcessingResult` with counts and error details.
@@ -103,10 +106,17 @@ def process_dsno(
 
     def _cb(event: str, data: dict | None = None) -> None:
         if progress_callback:
-            progress_callback(event, data or {})
-
+            progress_callback(event, data or {})    
+    
     setup_logger()
     result = ProcessingResult()
+    
+    if not isinstance(status_filter, list): 
+        raise ValueError("status_filter must be a list of strings or None")
+    
+    if not status_filter:
+        log.info("No status filter applied; processing all statuses.")
+        status_filter = None
 
     _cb("phase", {"text": "Starting processing..."})
     log.info("Starting processing...")
@@ -117,7 +127,7 @@ def process_dsno(
 
     _cb("phase", {"text": "Reading control sheet..."})
     parsed_range = DateRange.from_string(date_range)
-    pairs = get_invoice_dsno_pairs(parsed_range, control_sheet)
+    pairs = get_invoice_dsno_pairs(parsed_range, control_sheet, status_filter=status_filter)
 
     base_dir = Path(dsno_dir)
     processed_dir = base_dir / "Processed"

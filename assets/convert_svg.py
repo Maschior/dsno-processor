@@ -44,6 +44,6 @@ def create_colored_png(in_svg, out_png, fill_color):
     
     img.save(out_png)
 
-create_colored_png("assets/svg/check.svg", "assets/icons/check_dark.png", "#E0E0E0") # light gray for dark mode
-create_colored_png("assets/svg/check.svg", "assets/icons/check_light.png", "#202020") # dark gray for light mode
+create_colored_png("assets/svg/cummins-logo.svg", "assets/icons/cummins-logo_dark.png", "#E0E0E0") # light gray for dark mode
+create_colored_png("assets/svg/cummins-logo.svg", "assets/icons/cummins-logo_light.png", "#202020") # dark gray for light mode
 print("Conversion done.")
