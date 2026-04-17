@@ -1,12 +1,14 @@
 ; Script gerado para o Inno Setup
 ; Configurado para instalação local (Current User) - NÃO requer privilégios de Administrador.
 
+#define MyAppVersion "1.0.0"
+
 [Setup]
 ; Informações Básicas
 AppId={{6ee8a011-ae1d-49fd-a75c-a8495770db88}}
 AppName=DSNO Processor
 AppVerName=DSNO Processor
-AppVersion=1.0.0
+AppVersion={#MyAppVersion}
 AppPublisher=Matheus Borges
 DefaultDirName={sd}\Users\{username}\Softwares\DSNO Processor
 DefaultGroupName=DSNO Processor

@@ -18,7 +18,7 @@ download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&r
 upload_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
 download_dir = "C:\\Users\\$USER\\edi-process"
 upload_dir = "C:\\Users\\$USER\\edi-process\\Processed"
-headless = false
+headless = true
 
 [control_sheet.cols]
 invoice = "INVOICE"
