@@ -1995,7 +1995,6 @@ class SettingsWindow(ctk.CTkToplevel):
         self._TAB_NAMES = [
             t("settings.tab.general"),
             t("settings.tab.paths"),
-            t("tab.processor"),
             t("settings.tab.ebs"),
             t("dl.section_columns"),
             t("dl.section_folders"),
@@ -2056,7 +2055,6 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._build_tab_general(cfg)
         self._build_tab_paths(cfg)
-        self._build_tab_processor(cfg)
         self._build_tab_ebs(cfg)
         self._build_tab_columns(cfg)
         self._build_tab_folders(cfg)
@@ -2169,16 +2167,6 @@ class SettingsWindow(ctk.CTkToplevel):
             hint=t("settings.paths.customer_pre_path_hint"),
         )
 
-    def _build_tab_processor(self, cfg) -> None:
-        tab = self._tabview.tab(t("tab.processor"))
-        form = self._make_form(tab)
-
-        self._tab_hint(
-            form,
-            t("settings.processor.hint"),
-        )
-
-
     def _build_tab_ebs(self, cfg) -> None:
         tab = self._tabview.tab(t("settings.tab.ebs"))
         form = self._make_form(tab)
@@ -2247,17 +2235,17 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._add_text_field(
             form, 1, t("dl.dsno_column"), "ebs_col_dsno",
-            cfg.ebs.columns.dsno if cfg else "ARGUMENT2",
+            cfg.control_sheet_cols.dsno if cfg else "ARGUMENT2",
             hint=t("settings.columns.dsno_hint"),
         )
         self._add_text_field(
             form, 3, t("dl.date_column"), "ebs_col_date",
-            cfg.ebs.columns.date if cfg else "CREATION_DATE",
+            cfg.control_sheet_cols.date if cfg else "CREATION_DATE",
             hint=t("settings.columns.date_hint"),
         )
         self._add_text_field(
             form, 5, t("dl.status_column"), "ebs_col_status",
-            cfg.ebs.columns.status if cfg else "STATUS",
+            cfg.control_sheet_cols.status if cfg else "STATUS",
             hint=t("settings.columns.status_hint"),
         )
 
