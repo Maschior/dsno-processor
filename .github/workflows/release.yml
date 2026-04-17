@@ -37,10 +37,8 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Compile Inno Setup Installer
-        uses: ayberkcan/iscc-action@v2
-        with:
-          filepath: installer_setup.iss
-          options: "/dMyAppVersion=${{ steps.get_version.outputs.VERSION }}"
+        shell: pwsh
+        run: iscc /dMyAppVersion=${{ steps.get_version.outputs.VERSION }} installer_setup.iss
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
