@@ -9,6 +9,7 @@ import threading
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox
+from typing import Callable
 
 import customtkinter as ctk
 from PIL import Image
@@ -43,6 +44,10 @@ from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import ConfigurationError, CanceledError, LoginError
 from dsno_processor.i18n import t, set_language, SUPPORTED_LANGUAGES
 from dsno_processor.info_reader import get_status_options
+
+# ── Logs ────────────────────────────────────────────────────────
+
+log = logging.getLogger(__name__)
 
 # ── Appearance ────────────────────────────────────────────────────────
 ctk.set_appearance_mode("dark")
@@ -228,6 +233,10 @@ class MultiSelectDropdown(ctk.CTkFrame):
     def get_selected(self) -> list[str]:
         """Return list of checked options; empty list means 'All'."""
         return [opt for opt, var in self._vars.items() if var.get()]
+
+    def reset(self) -> None:
+        """Uncheck all options."""
+        self._check_none()
 
 
 # ── Logging handler ──────────────────────────────────────────────────
@@ -589,6 +598,14 @@ class DateInput(ctk.CTkFrame):
         self.entry.delete(0, "end")
         self.entry.insert(0, value)
 
+    def reset(self) -> None:
+        """Reset the entry to today's date/time."""
+        self.entry.delete(0, "end")
+        self.entry.insert(0, datetime.now().strftime(self._fmt))
+        # Reset border color in case it was invalid before
+        theme_color = ctk.ThemeManager.theme["CTkEntry"]["border_color"]
+        self.entry.configure(border_color=theme_color)
+
     # ── Callbacks from popup ──────────────────────────────────────
     def _set_date(self, day: int, month: int, year: int) -> None:
         """Called by the popup in date-only mode."""
@@ -672,10 +689,16 @@ class FilePickerRow(ctk.CTkFrame):
         label: str,
         default: str = "",
         browse_command=None,
+        placeholder: str = "",
+        on_change: Callable | None = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
         self.columnconfigure(1, weight=1)
+
+        # Clean default if it's '.' (pathlib.Path default)
+        if default == ".":
+            default = ""
 
         ctk.CTkLabel(
             self,
@@ -685,27 +708,46 @@ class FilePickerRow(ctk.CTkFrame):
             anchor="w",
         ).grid(row=0, column=0, padx=(0, 8), sticky="w")
 
-        self.var = tk.StringVar(value=default)
+        # (We avoid textvariable because it often prevents placeholder_text from appearing in CTk)
         self.entry = ctk.CTkEntry(
             self,
-            textvariable=self.var,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            placeholder_text=placeholder,
         )
         self.entry.grid(row=0, column=1, sticky="ew")
+
+        if default:
+            self.entry.insert(0, default)
+
+        self.on_change = on_change
+        self.entry.bind("<KeyRelease>", lambda e: self._handle_change())
+
+        def _internal_browse():
+            if browse_command:
+                browse_command()
+                self._handle_change()
 
         ctk.CTkButton(
             self,
             text=t("btn.browse"),
             width=80,
-            command=browse_command,
+            command=_internal_browse,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=0, column=2, padx=(8, 0))
 
     def get(self) -> str:
-        return self.var.get()
+        return self.entry.get()
 
     def set(self, value: str) -> None:
-        self.var.set(value)
+        if value == ".":
+            value = ""
+        self.entry.delete(0, tk.END)
+        self.entry.insert(0, value)
+        self._handle_change()
+
+    def _handle_change(self) -> None:
+        if self.on_change:
+            self.on_change()
 
 
 # ── Progress Dashboard ───────────────────────────────────────────────
@@ -732,8 +774,11 @@ class ProgressDashboard(ctk.CTkFrame):
         "pending": ("#455a64", "#90a4ae"),
     }
 
-    def __init__(self, master, cancel_command=None, **kwargs) -> None:
+    def __init__(self, master, cancel_command=None, enable_idle_hourglass=True, start_btn_text=None, start_btn_command=None, **kwargs) -> None:
         self.cancel_command = cancel_command
+        self.enable_idle_hourglass = enable_idle_hourglass
+        self.start_btn_text = start_btn_text
+        self.start_btn_command = start_btn_command
         super().__init__(master, fg_color="transparent", **kwargs)
         self._total = 0
         self._done = 0
@@ -765,7 +810,7 @@ class ProgressDashboard(ctk.CTkFrame):
             self._empty_img = None
 
         self._build_ui()
-        if self._hourglass_imgs:
+        if self._hourglass_imgs and self.enable_idle_hourglass:
             self._tick_idle()
 
     # ── UI construction ──────────────────────────────────────────
@@ -775,32 +820,46 @@ class ProgressDashboard(ctk.CTkFrame):
         phase_frame.pack(fill="x", pady=(0, 6))
         phase_inner = ctk.CTkFrame(phase_frame, fg_color="transparent")
         phase_inner.pack(fill="x", padx=12, pady=8)
+        phase_inner.grid_columnconfigure(0, weight=1)
 
-        # Using grid for precise alignment: [Emoji (30px)] [Centered Text (Weight 1)] [Symmetry Spacer (30px)]
-        phase_inner.grid_columnconfigure(0, weight=0)
-        phase_inner.grid_columnconfigure(1, weight=1)
-        phase_inner.grid_columnconfigure(2, weight=0)
+        # Multi-purpose phase area: can show a button (idle) or status info (running)
+        self._phase_info_frame = ctk.CTkFrame(phase_inner, fg_color="transparent")
+        self._phase_info_frame.grid(row=0, column=0, sticky="nsew")
+        self._phase_info_frame.grid_columnconfigure(1, weight=1)
 
         self._spinner_label = ctk.CTkLabel(
-            phase_inner, text="", width=30,
+            self._phase_info_frame, text="", width=30,
             font=ctk.CTkFont(size=14),
         )
         self._spinner_label.grid(row=0, column=0, sticky="w")
 
         self._phase_label = ctk.CTkLabel(
-            phase_inner,
+            self._phase_info_frame,
             text=t("dash.waiting"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             text_color=("gray40", "gray60"),
-            image=self._hourglass_imgs[0] if getattr(self, "_hourglass_imgs", []) else None,
+            image=(self._hourglass_imgs[0] if (getattr(self, "_hourglass_imgs", []) and self.enable_idle_hourglass) else self._empty_img),
             compound="left",
             padx=8
         )
         self._phase_label.grid(row=0, column=1, sticky="nsew")
 
-        # Hidden spacer to balance the emoji on the left for perfect text centering
-        self._symmetry_spacer = ctk.CTkLabel(phase_inner, text="", width=30)
+        self._symmetry_spacer = ctk.CTkLabel(self._phase_info_frame, text="", width=30)
         self._symmetry_spacer.grid(row=0, column=2, sticky="e")
+
+        self.start_btn = None
+        if self.start_btn_text:
+            self.start_btn = ctk.CTkButton(
+                phase_inner,
+                text=self.start_btn_text,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=14, weight="bold"),
+                height=40,
+                corner_radius=10,
+                width=280,
+                command=self.start_btn_command,
+            )
+            self.start_btn.grid(row=0, column=0, sticky="")
+            self._phase_info_frame.grid_remove() # Hide labels while button is visible
 
         # Progress bar
         prog_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -876,6 +935,12 @@ class ProgressDashboard(ctk.CTkFrame):
             self._done = self._success_count = self._error_count = self._skipped_count = 0
             self._cancelled = False
             self._running = True
+            
+            # Hide start button and show progress info
+            if self.start_btn:
+                self.start_btn.grid_remove()
+            self._phase_info_frame.grid()
+            
             for w in self._cards_frame.winfo_children():
                 w.destroy()
             if total == 0:
@@ -891,6 +956,45 @@ class ProgressDashboard(ctk.CTkFrame):
             self._stat_labels["pending"].configure(text=str(total))
             self._phase_label.configure(text=t("dash.starting"), text_color=("#1565c0", "#64b5f6"), image=self._empty_img)
             self._start_spinner()
+        self.after(0, _do)
+
+    def reset_to_idle(self) -> None:
+        """Fully reset the dashboard to its initial idle state."""
+        def _do():
+            self._running = False
+            self._stop_spinner()
+            self._total = 0
+            self._done = 0
+            
+            # Show start button if it exists
+            if self.start_btn:
+                self.start_btn.grid()
+                self._phase_info_frame.grid_remove()
+            else:
+                self._phase_info_frame.grid()
+                self._phase_label.configure(
+                    text=t("dash.waiting"), 
+                    text_color=("gray40", "gray60"),
+                    image=(self._hourglass_imgs[0] if (getattr(self, "_hourglass_imgs", []) and self.enable_idle_hourglass) else self._empty_img)
+                )
+                self._spinner_label.configure(text="")
+            
+            self._progress_bar.set(0)
+            self._progress_label.configure(text="0 / 0")
+            for k in self._stat_labels:
+                self._stat_labels[k].configure(text="0")
+                
+            for w in self._cards_frame.winfo_children():
+                w.destroy()
+                
+            self._empty_label = ctk.CTkLabel(
+                self._cards_frame, text=t("dash.no_items"),
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12), text_color=("gray50", "gray50"),
+            )
+            self._empty_label.pack(pady=20)
+            
+            if self._hourglass_imgs and self.enable_idle_hourglass:
+                self._tick_idle()
         self.after(0, _do)
 
     def set_phase(self, text: str) -> None:
@@ -924,6 +1028,8 @@ class ProgressDashboard(ctk.CTkFrame):
         def _do():
             self._running = False
             self._stop_spinner()
+            
+            # Keep the phase info visible at the end (don't show start button yet)
             self._phase_label.configure(image=self._empty_img)
             if self._cancelled:
                 self._phase_label.configure(text=f"Cancelled", text_color=("#c62828", "#ef5350"))
@@ -1328,6 +1434,22 @@ class DSNOApp(ctk.CTk):
         )
         self._lang_btn.pack(side="right", padx=(0, 4))
 
+        # Refresh/Reset button
+        ctk.CTkButton(
+            header_btns,
+            image=ctk.CTkImage(
+                light_image=Image.open(get_asset_path("assets/icons/refresh_light.png")),
+                dark_image=Image.open(get_asset_path("assets/icons/refresh_dark.png")),
+                size=(18, 18)
+            ),
+            text="",
+            width=30,
+            height=30,
+            corner_radius=6,
+            fg_color="transparent",
+            command=self._reset_current_dashboard,
+        ).pack(side="right", padx=(0, 2))
+
         # ── Tabview ──────────────────────────────────────────────
         self._tabview = ctk.CTkTabview(
             self,
@@ -1391,7 +1513,9 @@ class DSNOApp(ctk.CTk):
             tab,
             label=t("proc.customer_sheet"),
             default=default_customer,
+            placeholder=f"Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\17-04-2026\\International Motors Shipment track 15.04.2026.xlsx",
             browse_command=self._browse_customer,
+            on_change=self._update_run_btn_state,
         )
         self.customer_row.pack(fill="x", pady=4)
 
@@ -1399,7 +1523,9 @@ class DSNOApp(ctk.CTk):
             tab,
             label=t("proc.control_sheet"),
             default=default_control,
+            placeholder=t("settings.paths.control_sheet_hint"),
             browse_command=self._browse_control,
+            on_change=self._update_run_btn_state,
         )
         self.control_row.pack(fill="x", pady=4)
 
@@ -1407,32 +1533,47 @@ class DSNOApp(ctk.CTk):
             tab,
             label=t("proc.dsno_directory"),
             default=default_dsno_dir,
+            placeholder=f"C:\\Users\\{os.getlogin()}\\edi-process",
             browse_command=self._browse_dsno_dir,
+            on_change=self._update_run_btn_state,
         )
         self.dsno_row.pack(fill="x", pady=4)
 
-        # Run buttons container
-        btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=12)
-
-        self.run_btn = ctk.CTkButton(
-            btn_frame,
-            text=t("proc.start_btn"),
-            height=40,
-            corner_radius=10,
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=14, weight="bold"),
-            command=self._start_processing,
-        )
-        self.run_btn.pack(padx=(0, 4))
-
-        # Progress dashboard
+        # Progress dashboard with integrated Start button
         self.dashboard = ProgressDashboard(
             tab,
-            cancel_command=lambda: (self._show_blocking_overlay(), getattr(self, "_processor_cancel_event").set()) if hasattr(self, "_processor_cancel_event") else None
+            cancel_command=lambda: (self._show_blocking_overlay(), getattr(self, "_processor_cancel_event").set()) if hasattr(self, "_processor_cancel_event") else None,
+            enable_idle_hourglass=False,
+            start_btn_text=t("proc.start_btn"),
+            start_btn_command=self._start_processing
         )
-        self.dashboard.pack(fill="both", expand=True, pady=(0, 4))
+        self.dashboard.pack(fill="both", expand=True, pady=(10, 0))
+        self.run_btn = self.dashboard.start_btn # Alias for existing logic
 
-    # ──────────────────────────────────────────────────────────────
+        # Initial button state
+        self._update_run_btn_state()
+
+    def _update_run_btn_state(self) -> None:
+        """Enable or disable the Start button based on field completion."""
+        if not hasattr(self, "run_btn"):
+            return
+            
+        c1 = self.customer_row.get().strip()
+        c2 = self.control_row.get().strip()
+        c3 = self.dsno_row.get().strip()
+        
+        is_ready = bool(c1 and c2 and c3)
+
+        if not self.run_btn:
+            log.warning("Run button not found when updating state")
+            return
+        
+        self.run_btn.configure(
+            state="normal" if is_ready else "disabled",
+            fg_color=("#1f6aa5", "#1f6aa5") if is_ready else ("gray70", "gray30"),
+        )
+
+    # ─────────────────────────────────────────────────────── ───────
     # Tab: EBS Download
     # ──────────────────────────────────────────────────────────────
 
@@ -1470,13 +1611,26 @@ class DSNOApp(ctk.CTk):
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             ).grid(row=r, column=0, padx=(6, 8), pady=4, sticky="w")
 
-        def _ent(r, default="", width=None):
-            var = tk.StringVar(value=default)
-            e = ctk.CTkEntry(form, textvariable=var,
-                             font=ctk.CTkFont(family=_FONT_FAMILY, size=12))
-            if width:
-                e.configure(width=width)
+        class _WrapperVar:
+            def __init__(self, e):
+                self.e = e
+                self.cb = []
+            def get(self): return self.e.get()
+            def set(self, val):
+                self.e.delete(0, "end")
+                self.e.insert(0, val)
+                for c in self.cb: c()
+            def trace_add(self, mode, callback):
+                self.cb.append(callback)
+
+        def _ent(r, default="", width=None, placeholder=""):
+            e = ctk.CTkEntry(form, font=ctk.CTkFont(family=_FONT_FAMILY, size=12), placeholder_text=placeholder)
+            if width: e.configure(width=width)
+            if default: e.insert(0, default)
             e.grid(row=r, column=1, sticky="ew", pady=4, padx=(0, 6))
+            var = _WrapperVar(e)
+            e.bind("<KeyRelease>", lambda evt: [c() for c in var.cb])
+            var.trace_add("write", lambda *_: self._update_dl_run_btn_state())
             return var, e
 
         # Period
@@ -1488,14 +1642,19 @@ class DSNOApp(ctk.CTk):
         _lbl(t("dl.start_date"), row)
         self.dl_date_start = DateTimeInput(form)
         self.dl_date_start.grid(row=row, column=1, columnspan=2, sticky="w", pady=4, padx=(0, 6))
+        self.dl_date_start.entry.bind("<KeyRelease>", lambda e: self._update_dl_run_btn_state(), add="+")
+        orig_set_start = self.dl_date_start._set_datetime
+        self.dl_date_start._set_datetime = lambda *a, **k: (orig_set_start(*a, **k), self._update_dl_run_btn_state())
         row += 1
         _lbl(t("dl.end_date"), row)
         self.dl_date_end = DateTimeInput(form)
         self.dl_date_end.grid(row=row, column=1, columnspan=2, sticky="w", pady=4, padx=(0, 6))
+        self.dl_date_end.entry.bind("<KeyRelease>", lambda e: self._update_dl_run_btn_state(), add="+")
+        orig_set_end = self.dl_date_end._set_datetime
+        self.dl_date_end._set_datetime = lambda *a, **k: (orig_set_end(*a, **k), self._update_dl_run_btn_state())
         row += 1
         _lbl(t("dl.status_filter"), row)
-        self.dl_status_filter_var, _e = _ent(row, "")
-        add_placeholder(_e, "Processed, Downloaded, <empty>"); row += 1
+        self.dl_status_filter_var, _e = _ent(row, "", placeholder="Processed, Downloaded, <empty>"); row += 1
 
         # Files
         ctk.CTkLabel(form, text=t("dl.section_files"), anchor="w",
@@ -1504,13 +1663,13 @@ class DSNOApp(ctk.CTk):
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("dl.download_dir"), row)
-        self.dl_dir_var, _ = _ent(row, str(cfg.download_dir) if cfg else "")
+        self.dl_dir_var, _ = _ent(row, str(cfg.download_dir) if cfg and str(cfg.download_dir) != "." else "", placeholder="C:\\...")
         ctk.CTkButton(form, text=t("btn.browse"), width=70,
             command=self._browse_dl_dir,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
         ).grid(row=row, column=2, padx=(4, 6), pady=4); row += 1
         _lbl(t("proc.customer_sheet"), row)
-        self.dl_sheet_var, _ = _ent(row, str(cfg.control_sheet) if cfg else "")
+        self.dl_sheet_var, _ = _ent(row, str(cfg.control_sheet) if cfg and str(cfg.control_sheet) != "." else "", placeholder="C:\\...")
         ctk.CTkButton(form, text=t("btn.browse"), width=70,
             command=self._browse_dl_sheet,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
@@ -1569,6 +1728,27 @@ class DSNOApp(ctk.CTk):
         )
         self.dl_dashboard.pack(fill="both", expand=True, pady=4)
 
+        # Initial button state
+        self._update_dl_run_btn_state()
+
+    def _update_dl_run_btn_state(self) -> None:
+        """Enable or disable the Download Start button based on field completion."""
+        if not hasattr(self, "dl_start_btn"):
+            return
+            
+        c1 = self.dl_date_start.get().strip() if hasattr(self, "dl_date_start") else ""
+        c2 = self.dl_date_end.get().strip() if hasattr(self, "dl_date_end") else ""
+        c3 = self.dl_dir_var.get().strip() if hasattr(self, "dl_dir_var") else ""
+        c4 = self.dl_url_var.get().strip() if hasattr(self, "dl_url_var") else ""
+        c5 = self.dl_sheet_var.get().strip() if hasattr(self, "dl_sheet_var") else ""
+        
+        is_ready = bool(c1 and c2 and c3 and c4 and c5)
+
+        self.dl_start_btn.configure(
+            state="normal" if is_ready else "disabled",
+            fg_color=("#2e7d32", "#1b5e20") if is_ready else ("gray70", "gray30"),
+        )
+
     # ──────────────────────────────────────────────────────────────
     # Tab: EBS Upload
     # ──────────────────────────────────────────────────────────────
@@ -1607,11 +1787,25 @@ class DSNOApp(ctk.CTk):
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             ).grid(row=r, column=0, padx=(6, 8), pady=5, sticky="w")
 
-        def _ent(r, default=""):
-            var = tk.StringVar(value=default)
-            ctk.CTkEntry(form, textvariable=var,
-                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            ).grid(row=r, column=1, sticky="ew", pady=5, padx=(0, 6))
+        class _WrapperVar:
+            def __init__(self, e):
+                self.e = e
+                self.cb = []
+            def get(self): return self.e.get()
+            def set(self, val):
+                self.e.delete(0, "end")
+                self.e.insert(0, val)
+                for c in self.cb: c()
+            def trace_add(self, mode, callback):
+                self.cb.append(callback)
+
+        def _ent(r, default="", placeholder=""):
+            e = ctk.CTkEntry(form, font=ctk.CTkFont(family=_FONT_FAMILY, size=12), placeholder_text=placeholder)
+            if default: e.insert(0, default)
+            e.grid(row=r, column=1, sticky="ew", pady=5, padx=(0, 6))
+            var = _WrapperVar(e)
+            e.bind("<KeyRelease>", lambda evt: [c() for c in var.cb])
+            var.trace_add("write", lambda *_: self._update_ul_run_btn_state())
             return var
 
         # Connection
@@ -1630,7 +1824,7 @@ class DSNOApp(ctk.CTk):
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("ul.upload_dir"), row)
-        self.ul_dir_var = _ent(row, str(cfg.upload_dir) if cfg else "")
+        self.ul_dir_var = _ent(row, str(cfg.upload_dir) if cfg and str(cfg.upload_dir) != "." else "", placeholder="C:\\...")
         ctk.CTkButton(form, text=t("btn.browse"), width=70,
             command=self._browse_ul_dir,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
@@ -1665,6 +1859,25 @@ class DSNOApp(ctk.CTk):
             cancel_command=lambda: (self._show_blocking_overlay(), getattr(self,("_ul_cancel_event")).set()) if hasattr(self, "_ul_cancel_event") else None
         )
         self.ul_dashboard.pack(fill="both", expand=True, pady=4)
+
+        # Initial button state
+        self._update_ul_run_btn_state()
+
+    def _update_ul_run_btn_state(self) -> None:
+        """Enable or disable the Upload Start button based on field completion."""
+        if not hasattr(self, "ul_start_btn"):
+            return
+            
+        c1 = self.ul_url_var.get().strip() if hasattr(self, "ul_url_var") else ""
+        c2 = self.ul_dir_var.get().strip() if hasattr(self, "ul_dir_var") else ""
+        c3 = self.ul_folder_var.get().strip() if hasattr(self, "ul_folder_var") else ""
+        
+        is_ready = bool(c1 and c2 and c3)
+
+        self.ul_start_btn.configure(
+            state="normal" if is_ready else "disabled",
+            fg_color=("#e65100", "#bf360c") if is_ready else ("gray70", "gray30"),
+        )
 
     # ──────────────────────────────────────────────────────────────
     # Browse dialogs — Processor
@@ -1797,8 +2010,35 @@ class DSNOApp(ctk.CTk):
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
             self._hide_blocking_overlay()
-            self.run_btn.configure(state="normal")
+            # If finished, we could optionally show the start button again,
+            # but for now we follow the user's "botão sumirá" (it remains hidden while showing final status)
+            # We only ensure it's enabled if we were to show it again.
+            self._update_run_btn_state()
             self.dashboard.cancel_btn.configure(state="disabled")
+
+    def _reset_current_dashboard(self) -> None:
+        """Reset the dashboard and filters of the currently selected tab."""
+        current_tab = self._tabview.get()
+        if current_tab == self._TAB_PROC:
+            # Reset filters
+            self.start_date.reset()
+            self.end_date.reset()
+            self.filter_by_status.reset()
+            
+            # Reset dashboard
+            self.dashboard.reset_to_idle()
+            self._update_run_btn_state()
+        elif current_tab == self._TAB_DOWNLOAD:
+            # Reset filters
+            self.dl_date_start.reset()
+            self.dl_date_end.reset()
+            self.dl_status_filter_var.set("")
+            
+            # Reset dashboard
+            self.dl_dashboard.reset_to_idle()
+        elif current_tab == self._TAB_UPLOAD:
+            # Upload doesn't have filters in the same way, just paths/index
+            self.ul_dashboard.reset_to_idle()
 
     # ──────────────────────────────────────────────────────────────
     # Processing — EBS Download tab
@@ -1868,7 +2108,7 @@ class DSNOApp(ctk.CTk):
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
             self._hide_blocking_overlay()
-            self.dl_start_btn.configure(state="normal")
+            self._update_dl_run_btn_state()
             self.dl_dashboard.cancel_btn.configure(state="disabled")
 
     # ──────────────────────────────────────────────────────────────
@@ -1932,7 +2172,7 @@ class DSNOApp(ctk.CTk):
             messagebox.showerror(t("settings.save_error_title"), str(exc))
         finally:
             self._hide_blocking_overlay()
-            self.ul_start_btn.configure(state="normal")
+            self._update_ul_run_btn_state()
             self.ul_dashboard.cancel_btn.configure(state="disabled")
 
     # ──────────────────────────────────────────────────────────────
@@ -2233,20 +2473,47 @@ class SettingsWindow(ctk.CTkToplevel):
             t("settings.columns.hint"),
         )
 
-        self._add_text_field(
-            form, 1, t("dl.dsno_column"), "ebs_col_dsno",
-            cfg.control_sheet_cols.dsno if cfg else "ARGUMENT2",
+        row = 1
+        row = self._add_text_field(
+            form, row, t("dl.invoice_column"), "ebs_col_invoice",
+            (cfg.control_sheet_cols.invoice if cfg else "INVOICE"),
+            hint=t("settings.columns.invoice_hint"),
+        )
+        row = self._add_text_field(
+            form, row, t("dl.dsno_column"), "ebs_col_dsno",
+            (cfg.control_sheet_cols.dsno if cfg else "ARGUMENT2"),
             hint=t("settings.columns.dsno_hint"),
         )
-        self._add_text_field(
-            form, 3, t("dl.date_column"), "ebs_col_date",
-            cfg.control_sheet_cols.date if cfg else "CREATION_DATE",
+        row = self._add_text_field(
+            form, row, t("dl.date_column"), "ebs_col_date",
+            (cfg.control_sheet_cols.date if cfg else "CREATION_DATE"),
             hint=t("settings.columns.date_hint"),
         )
-        self._add_text_field(
-            form, 5, t("dl.status_column"), "ebs_col_status",
-            cfg.control_sheet_cols.status if cfg else "STATUS",
+        row = self._add_text_field(
+            form, row, t("dl.status_column"), "ebs_col_status",
+            (cfg.control_sheet_cols.status if cfg else "STATUS"),
             hint=t("settings.columns.status_hint"),
+        )
+
+        # ── Customer Sheet Section ─────────────────────────────────
+        ctk.CTkLabel(
+            form, text=t("settings.columns.customer_section"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            text_color=("#1f6aa5", "#3a9ad9"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 5))
+        row += 1
+
+        row = self._add_text_field(
+            form, row, t("settings.columns.cust_invoice"), "cust_col_invoice",
+            (cfg.customer_sheet_cols.invoice if cfg else "Invoice"),
+        )
+        row = self._add_text_field(
+            form, row, t("settings.columns.cust_booking"), "cust_col_booking",
+            (cfg.customer_sheet_cols.booking if cfg else "Booking/HAWB"),
+        )
+        row = self._add_text_field(
+            form, row, t("settings.columns.cust_container"), "cust_col_container",
+            (cfg.customer_sheet_cols.container if cfg else "Container"),
         )
 
     def _build_tab_folders(self, cfg) -> None:
@@ -2408,6 +2675,10 @@ class SettingsWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=1, sticky="ew", pady=3)
 
+        # If default is '.', clear it so it doesn't block placeholders (if any)
+        if default == ".":
+            var.set("")
+
         # Path validity indicator + browse button frame
         btn_frame = ctk.CTkFrame(parent, fg_color="transparent")
         btn_frame.grid(row=row, column=2, padx=(4, 0), pady=3)
@@ -2515,10 +2786,10 @@ class SettingsWindow(ctk.CTkToplevel):
                 ),
             ),
             control_sheet_cols=ControlSheetColsConfig(
-                invoice=self._vars["ebs_col_invoice"].get(),
-                dsno=self._vars["ebs_col_dsno"].get(),
-                date=self._vars["ebs_col_date"].get(),
-                status=self._vars["ebs_col_status"].get(),
+                invoice=self._vars.get("ebs_col_invoice", tk.StringVar(value="INVOICE")).get(),
+                dsno=self._vars.get("ebs_col_dsno", tk.StringVar(value="ARGUMENT2")).get(),
+                date=self._vars.get("ebs_col_date", tk.StringVar(value="CREATION_DATE")).get(),
+                status=self._vars.get("ebs_col_status", tk.StringVar(value="STATUS")).get(),
             ),
             customer_sheet_cols=CustomerSheetColsConfig(
                 invoice=self._vars.get("cust_col_invoice", tk.StringVar(value="Invoice")).get(),

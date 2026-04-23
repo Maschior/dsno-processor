@@ -86,6 +86,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dl.section_connection": "Connection",
         "dl.ebs_url": "EBS URL:",
         "dl.section_columns": "Columns",
+        "dl.invoice_column": "Invoice Column:",
         "dl.dsno_column": "DSNO Column:",
         "dl.date_column": "Date Column:",
         "dl.status_column": "Status Column:",
@@ -180,12 +181,17 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Settings: Columns ───────────────────────────────────
         "settings.columns.hint": "Column names used in the EBS spreadsheets.",
+        "settings.columns.invoice_hint": "Name of the column containing the invoice number in the control sheet.",
         "settings.columns.dsno": "DSNO Column:",
         "settings.columns.dsno_hint": "Name of the column containing the DSNO identifier.",
         "settings.columns.date": "Date Column:",
         "settings.columns.date_hint": "Name of the creation date column.",
         "settings.columns.status": "Status Column:",
         "settings.columns.status_hint": "Name of the status column.",
+        "settings.columns.customer_section": "Customer Sheet Columns",
+        "settings.columns.cust_invoice": "Invoice:",
+        "settings.columns.cust_booking": "Booking/HAWB:",
+        "settings.columns.cust_container": "Container:",
 
         # ── Settings: Folders ───────────────────────────────────
         "settings.folders.hint": "Folder indices used by EBS for download and upload.",
@@ -264,6 +270,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dl.section_connection": "Conexão",
         "dl.ebs_url": "URL EBS:",
         "dl.section_columns": "Colunas",
+        "dl.invoice_column": "Coluna Invoice:",
         "dl.dsno_column": "Coluna DSNO:",
         "dl.date_column": "Coluna Data:",
         "dl.status_column": "Coluna Status:",
@@ -358,12 +365,17 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Settings: Columns ───────────────────────────────────
         "settings.columns.hint": "Nomes das colunas usadas nas planilhas do EBS.",
+        "settings.columns.invoice_hint": "Nome da coluna que contém o número da fatura na planilha de controle.",
         "settings.columns.dsno": "Coluna DSNO:",
         "settings.columns.dsno_hint": "Nome da coluna que contém o identificador DSNO.",
         "settings.columns.date": "Coluna Data:",
         "settings.columns.date_hint": "Nome da coluna de data de criação.",
         "settings.columns.status": "Coluna Status:",
         "settings.columns.status_hint": "Nome da coluna de status.",
+        "settings.columns.customer_section": "Colunas da Planilha do Cliente",
+        "settings.columns.cust_invoice": "Invoice:",
+        "settings.columns.cust_booking": "Booking/HAWB:",
+        "settings.columns.cust_container": "Container:",
 
         # ── Settings: Folders ───────────────────────────────────
         "settings.folders.hint": "Índices de pastas usados pelo EBS para download e upload.",
