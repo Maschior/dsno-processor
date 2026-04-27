@@ -124,6 +124,16 @@ def start_browser(headless: bool = False) -> webdriver.Chrome:
 
     return webdriver.Chrome(options=options)
 
+def _stoppable_sleep(seconds: float, cancel_event) -> None:
+    if not cancel_event:
+        time.sleep(seconds)
+        return
+    end_time = time.time() + seconds
+    while time.time() < end_time:
+        if cancel_event.is_set():
+            raise CanceledError("Cancelled by user")
+        time.sleep(0.1)
+
 def open_url(driver: webdriver.Chrome, url: str) -> None:
     """Navigate the browser to the given URL."""
     driver.get(url)
@@ -141,6 +151,9 @@ def perform_microsoft_login(
     """Automate Microsoft SSO login: click sign-in, enter email, enter password."""
     logger.info("Starting automatic Microsoft login...")
 
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
+
     # Step 1: Click on sign-in button
     try:
         sign_in_btn = wait.until(
@@ -148,13 +161,16 @@ def perform_microsoft_login(
         )
         sign_in_btn.click()
         logger.info("Clicked sign-in button.")
-        time.sleep(3)
+        _stoppable_sleep(3, cancel_event)
     except Exception:
         logger.info("Sign-in button not found — possibly already on login page or page down.")
 
     # Check if page is down
     if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
         raise Exception("Login screen or EBS appears to be down (connection error).")
+
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
 
     # Step 2: Enter email
     try:
@@ -164,9 +180,9 @@ def perform_microsoft_login(
         email_input.clear()
         email_input.send_keys(email)
         logger.info("Email entered.")
-        time.sleep(1)
+        _stoppable_sleep(1, cancel_event)
         email_input.send_keys(Keys.RETURN)
-        time.sleep(3)
+        _stoppable_sleep(3, cancel_event)
     except Exception as e:
         logger.warning("Error entering email, or login screen not available: %s", e)
         raise Exception("Failed to find or interact with Email input. Is the login screen loaded?")
@@ -182,7 +198,7 @@ def perform_microsoft_login(
         password_input.clear()
         password_input.send_keys(password)
         logger.info("Password entered.")
-        time.sleep(1)
+        _stoppable_sleep(1, cancel_event)
         password_input.send_keys(Keys.RETURN)
         
         # Check for incorrect password
@@ -200,7 +216,7 @@ def perform_microsoft_login(
             if "kmsi" in driver.current_url.lower() or "ebs" in driver.current_url.lower():
                 break
 
-            time.sleep(0.5)
+            _stoppable_sleep(0.5, cancel_event)
             
     except LoginError:
         raise
@@ -219,7 +235,7 @@ def perform_microsoft_login(
         )
         xxdba_menu.click()
         logger.info("Clicked 'XXDBA Utilities' menu.")
-        time.sleep(3)
+        _stoppable_sleep(3, cancel_event)
     except Exception:
         logger.info(
             "'XXDBA Utilities' menu not found "
@@ -232,7 +248,7 @@ def perform_microsoft_login(
     if target_url:
         logger.info("Reloading target URL to ensure correct page...")
         driver.get(target_url)
-        time.sleep(5)
+        _stoppable_sleep(5, cancel_event)
         # Final check if EBS is down after redirect
         if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
             raise Exception("EBS appears to be down (connection error) after login.")
@@ -252,6 +268,8 @@ def list_folders(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
             text = option.text.strip() or "(empty)"
             folders.append(f"[{i}] {text}")
         return folders
+    except CanceledError:
+        raise
     except Exception as e:
         logger.warning("Could not list folders: %s", e)
         return []
@@ -260,10 +278,10 @@ def list_folders(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
 # ── Upload ───────────────────────────────────────────────────────────
 
 
-def _reset_form(driver, url):
+def _reset_form(driver, url, cancel_event=None):
     """Reset the EBS form by reloading the page."""
     driver.get(url)
-    time.sleep(3)
+    _stoppable_sleep(3, cancel_event)
 
 
 def perform_upload(
@@ -271,6 +289,7 @@ def perform_upload(
     wait: WebDriverWait,
     file_path: str,
     folder_index: int,
+    cancel_event=None,
 ) -> bool:
     """Upload a single file to EBS."""
     try:
@@ -289,10 +308,12 @@ def perform_upload(
         )
         select = Select(select_el)
         select.select_by_index(folder_index)
-        time.sleep(2)
+        _stoppable_sleep(2, cancel_event)
 
         # 2. Set file path in the file input (with retry for stale elements)
         for attempt in range(3):
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
             try:
                 input_file = wait.until(
                     EC.presence_of_element_located((By.ID, "FileData_oafileUpload"))
@@ -301,26 +322,30 @@ def perform_upload(
                 break
             except StaleElementReferenceException:
                 if attempt == 2: raise
-                time.sleep(1)
+                _stoppable_sleep(1, cancel_event)
                 continue
         
-        time.sleep(2)
+        _stoppable_sleep(2, cancel_event)
 
         # 3. Click Upload button (with retry for stale elements)
         for attempt in range(3):
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
             try:
                 button = wait.until(EC.element_to_be_clickable((By.ID, "Upload")))
                 button.click()
                 break
             except StaleElementReferenceException:
                 if attempt == 2: raise
-                time.sleep(1)
+                _stoppable_sleep(1, cancel_event)
                 continue
         
-        time.sleep(4)
+        _stoppable_sleep(4, cancel_event)
 
 
         return True
+    except CanceledError:
+        raise
     except Exception as e:
         logger.warning("Error during upload: %s", e)
         return False
@@ -408,7 +433,7 @@ def run_upload(config: UploadConfig, progress_callback=None, cancel_event=None) 
             _cb("phase", {"text": f"Uploading {filename} ({i}/{len(pending)})..."})
             logger.info("[%d/%d] %s", i, len(pending), filename)
 
-            ok = perform_upload(driver, wait, full_path, config.folder_index)
+            ok = perform_upload(driver, wait, full_path, config.folder_index, cancel_event)
             if ok:
                 record_success(history, filename, config.upload_dir)
                 logger.info("Upload successful!")
@@ -421,7 +446,7 @@ def run_upload(config: UploadConfig, progress_callback=None, cancel_event=None) 
 
             # Reset form for the next file
             if i < len(pending):
-                _reset_form(driver, config.ebs_url)
+                _reset_form(driver, config.ebs_url, cancel_event)
 
         # 7. Report
         logger.info("=" * 55)

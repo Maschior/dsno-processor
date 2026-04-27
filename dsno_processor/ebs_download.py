@@ -211,6 +211,16 @@ def open_url(driver: webdriver.Chrome, url: str) -> None:
     logger.info("Browser opened.")
 
 
+def _stoppable_sleep(seconds: float, cancel_event) -> None:
+    if not cancel_event:
+        time.sleep(seconds)
+        return
+    end_time = time.time() + seconds
+    while time.time() < end_time:
+        if cancel_event.is_set():
+            raise CanceledError("Cancelled by user")
+        time.sleep(0.1)
+
 def perform_microsoft_login(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
@@ -222,6 +232,9 @@ def perform_microsoft_login(
     """Automate Microsoft SSO login: click sign-in, enter email, enter password."""
     logger.info("Starting automatic Microsoft login...")
 
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
+
     # Step 1: Click on sign-in button
     try:
         sign_in_btn = wait.until(
@@ -229,13 +242,18 @@ def perform_microsoft_login(
         )
         sign_in_btn.click()
         logger.info("Clicked sign-in button.")
-        time.sleep(3)
+        _stoppable_sleep(3, cancel_event)
+    except CanceledError:
+        raise
     except Exception:
         logger.info("Sign-in button not found — possibly already on login page or page down.")
 
     # Check if page is down
     if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
         raise Exception("Login screen or EBS appears to be down (connection error).")
+
+    if cancel_event and cancel_event.is_set():
+        raise CanceledError("Cancelled by user")
 
     # Step 2: Enter email
     try:
@@ -245,9 +263,11 @@ def perform_microsoft_login(
         email_input.clear()
         email_input.send_keys(email)
         logger.info("Email entered.")
-        time.sleep(1)
+        _stoppable_sleep(1, cancel_event)
         email_input.send_keys(Keys.RETURN)
-        time.sleep(3)
+        _stoppable_sleep(3, cancel_event)
+    except CanceledError:
+        raise
     except Exception as e:
         logger.warning("Error entering email, or login screen not available: %s", e)
         raise Exception("Failed to find or interact with Email input. Is the login screen loaded?")
@@ -263,7 +283,7 @@ def perform_microsoft_login(
         password_input.clear()
         password_input.send_keys(password)
         logger.info("Password entered.")
-        time.sleep(1)
+        _stoppable_sleep(1, cancel_event)
         password_input.send_keys(Keys.RETURN)
         
         # Check for incorrect password
@@ -281,7 +301,7 @@ def perform_microsoft_login(
             if "kmsi" in driver.current_url.lower() or "ebs" in driver.current_url.lower():
                 break
 
-            time.sleep(0.5)
+            _stoppable_sleep(0.5, cancel_event)
     
     except LoginError as e:
         logger.error(f"Login failed: {str(e)}")
@@ -304,7 +324,9 @@ def perform_microsoft_login(
         )
         xxdba_menu.click()
         logger.info("Clicked 'XXDBA Utilities' menu.")
-        time.sleep(3)
+        _stoppable_sleep(3, cancel_event)
+    except CanceledError:
+        raise
     except Exception:
         logger.info(
             "'XXDBA Utilities' menu not found "
@@ -317,7 +339,7 @@ def perform_microsoft_login(
     if target_url:
         logger.info("Reloading target URL to ensure correct page...")
         driver.get(target_url)
-        time.sleep(5)
+        _stoppable_sleep(5, cancel_event)
         # Final check if EBS is down after redirect
         if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
             raise Exception("EBS appears to be down (connection error) after login.")
@@ -335,6 +357,8 @@ def list_folders(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
             text = option.text.strip() or "(empty)"
             folders.append(f"[{i}] {text}")
         return folders
+    except CanceledError:
+        raise
     except Exception as e:
         logger.warning("Could not list folders: %s", e)
         return []
@@ -343,12 +367,12 @@ def list_folders(driver: webdriver.Chrome, wait: WebDriverWait) -> list[str]:
 # ── Download ─────────────────────────────────────────────────────────
 
 
-def _select_folder(driver, wait, index):
+def _select_folder(driver, wait, index, cancel_event=None):
     """Select a folder by index in the EBS dropdown."""
     select_el = wait.until(EC.presence_of_element_located((By.ID, "FilePath")))
     select = Select(select_el)
     select.select_by_index(index)
-    time.sleep(3)
+    _stoppable_sleep(3, cancel_event)
 
 
 def _file_found(driver):
@@ -438,6 +462,8 @@ def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir
         logger.info("     Download successful via requests: %s", save_name)
         return True
         
+    except CanceledError:
+        raise
     except Exception as e:
         logger.error("     Unexpected error in requests download: %s", e)
         return False
@@ -451,6 +477,8 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
         # when the page is still "settling" after a folder selection.
         field = None
         for attempt in range(3):
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
             try:
                 field = wait.until(EC.element_to_be_clickable((By.ID, "FileName")))
                 field.clear()
@@ -460,23 +488,25 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
                     break
             except StaleElementReferenceException:
                 if attempt == 2: raise
-                time.sleep(1)
+                _stoppable_sleep(1, cancel_event)
                 continue
         
-        time.sleep(5)
+        _stoppable_sleep(5, cancel_event)
         
         # TAB might also need protection
         for attempt in range(3):
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
             try:
                 field = driver.find_element(By.ID, "FileName")
                 field.send_keys(Keys.TAB)
                 break
             except StaleElementReferenceException:
                 if attempt == 2: raise
-                time.sleep(1)
+                _stoppable_sleep(1, cancel_event)
                 continue
                 
-        time.sleep(2)
+        _stoppable_sleep(2, cancel_event)
 
 
         # 1. Check for EBS LOV/Popup (indicates file not found uniquely)
@@ -509,15 +539,17 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
         
         return False
 
+    except CanceledError:
+        raise
     except Exception as e:
         logger.warning("Error in _attempt_download: %s", e)
         return False
 
 
-def _reset_form(driver, url):
+def _reset_form(driver, url, cancel_event=None):
     """Reset the EBS form by reloading the page."""
     driver.get(url)
-    time.sleep(3)
+    _stoppable_sleep(3, cancel_event)
 
 
 def download_file(
@@ -536,20 +568,24 @@ def download_file(
             i, len(config.folder_indices), index,
         )
         try:
-            _select_folder(driver, wait, index)
+            _select_folder(driver, wait, index, cancel_event)
+        except CanceledError:
+            raise
         except Exception as e:
+            if cancel_event and cancel_event.is_set():
+                raise CanceledError("Cancelled by user")
             logger.warning("Could not select folder %d: %s", i, e)
-            _reset_form(driver, config.ebs_url)
+            _reset_form(driver, config.ebs_url, cancel_event)
             continue
 
         if not _file_found(driver):
             logger.info("File input not available in this folder.")
-            _reset_form(driver, config.ebs_url)
+            _reset_form(driver, config.ebs_url, cancel_event)
             continue
 
         if _attempt_download(driver, wait, filename, config, cancel_event):
             return True
-        _reset_form(driver, config.ebs_url)
+        _reset_form(driver, config.ebs_url, cancel_event)
 
     return False
 

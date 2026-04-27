@@ -1984,6 +1984,7 @@ class DSNOApp(ctk.CTk):
                 control_sheet=self.control_row.get(),
                 dsno_dir=self.dsno_row.get(),
                 progress_callback=self._make_progress_callback(),
+                cancel_event=getattr(self, "_processor_cancel_event", None),
                 status_filter=status_filter,
             )
 

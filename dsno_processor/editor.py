@@ -192,3 +192,9 @@ def move_to_processed(filepath: Path, processed_dir: Path) -> bool:
     except OSError as exc:
         log.error("Failed to move DSNO file %s: %s", filepath.name, exc)
         return False
+
+def get_size(filepath: Path) -> int:
+    """Get the size of the file in bytes."""
+    if not filepath.exists():
+        raise DsnoFileError(f"File not found for size check: {filepath}")
+    return filepath.stat().st_size

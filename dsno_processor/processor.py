@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from .editor import edit_navstar_dsno, move_to_processed, normalize_file
+from .editor import edit_navstar_dsno, move_to_processed, normalize_file, get_size
 from .exceptions import DsnoProcessorError, CanceledError
 from .info_reader import get_dsno_info
 from .invoice_reader import get_invoice_dsno_pairs
@@ -63,16 +63,27 @@ def _process_single_dsno(
             booking=booking,
         )
 
+        if not dsno_path.exists():
+            return f"DSNO file not found: {dsno_path.name}"
+
+        original_size = get_size(dsno_path)
         edit_navstar_dsno(dsno_path, dsno_info)
 
-        if dsno_path.exists():
-            normalize_file(dsno_path)
-            log.info("Normalized file %s", dsno_path.name)
+        normalize_file(dsno_path)
+        log.info("Normalized file %s", dsno_path.name)
 
-        return None  # success
+        new_size = get_size(dsno_path)
 
-    except DsnoProcessorError as exc:
-        return str(exc)
+        if new_size == original_size:
+            return f"File size unchanged after processing: {dsno_path.name}"
+
+        return None
+        
+    except CanceledError:
+        raise
+    except Exception as exc:
+        log.exception("Unexpected error processing %s: %s", dsno_path.name, exc)
+        return f"Unexpected error: {exc}"
 
 
 def process_dsno(
@@ -127,7 +138,18 @@ def process_dsno(
 
     _cb("phase", {"text": "Reading control sheet..."})
     parsed_range = DateRange.from_string(date_range)
+    
+    if cancel_event and cancel_event.is_set():
+        log.info("Processing cancelled by user.")
+        _cb("cancelled", {"name": "System", "detail": "Cancelled by user"})
+        raise CanceledError("Cancelled by user")
+
     pairs = get_invoice_dsno_pairs(parsed_range, control_sheet, status_filter=status_filter)
+
+    if cancel_event and cancel_event.is_set():
+        log.info("Processing cancelled by user.")
+        _cb("cancelled", {"name": "System", "detail": "Cancelled by user"})
+        raise CanceledError("Cancelled by user")
 
     base_dir = Path(dsno_dir)
     processed_dir = base_dir / "Processed"
