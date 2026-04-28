@@ -1,6 +1,6 @@
 """DSNO Processor — batch processing of DSNO files against ASN spreadsheets."""
 
-__version__ = "1.0.3"
+__version__ = "1.1.0"
 
 from .ebs_download import DownloadConfig, run_download
 from .ebs_upload import UploadConfig, run_upload

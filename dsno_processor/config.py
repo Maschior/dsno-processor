@@ -67,6 +67,12 @@ class CustomerSheetColsConfig:
     booking: str = "Booking/HAWB"
     container: str = "Container"
 
+@dataclass
+class CustomerSheetPropertiesConfig:
+    """Configuration for reading the Customer spreadsheet."""
+    
+    sheet_name: str = ""
+
 
 @dataclass
 class EbsFoldersConfig:
@@ -118,6 +124,9 @@ class AppConfig:
     customer_sheet_cols: CustomerSheetColsConfig = field(
         default_factory=CustomerSheetColsConfig
     )
+    customer_sheet_properties: CustomerSheetPropertiesConfig = field(
+        default_factory=CustomerSheetPropertiesConfig
+    )
     ebs: EbsConfig = field(default_factory=EbsConfig)
     credentials: CredentialsConfig = field(default_factory=CredentialsConfig)
 
@@ -143,6 +152,10 @@ class AppConfig:
     @property
     def customer_sheet(self) -> Path:
         return self.paths.customer_sheet
+
+    @property
+    def CUSTOMER_SHEET_NAME(self) -> str:
+        return self.customer_sheet_properties.sheet_name
 
     @property
     def customer_sheet_pre_path(self) -> Path:
@@ -258,6 +271,9 @@ def _config_to_dict(config: AppConfig) -> dict:
                 "booking": config.customer_sheet_cols.booking,
                 "container": config.customer_sheet_cols.container,
             },
+            "config": {
+                "sheet_name": config.customer_sheet_properties.sheet_name,
+            }
         },
         "control_sheet": {
             "cols": {
@@ -294,6 +310,7 @@ def _dict_to_config(data: dict) -> AppConfig:
     ctrl_sheet_d = data.get("control_sheet", {})
     ctrl_cols_d = ctrl_sheet_d.get("cols", {})
     ebs_d = data.get("ebs", {})
+    
 
     folders_d = ebs_d.get("folders", ebs_d.get("pastas", {}))
     cred_d = data.get("credentials", {})
@@ -320,6 +337,9 @@ def _dict_to_config(data: dict) -> AppConfig:
             invoice=cust_cols_d.get("invoice", "Invoice"),
             booking=cust_cols_d.get("booking", "Booking/HAWB"),
             container=cust_cols_d.get("container", "Container"),
+        ),
+        customer_sheet_properties=CustomerSheetPropertiesConfig(
+            sheet_name=cust_sheet_d.get("config", {}).get("sheet_name", ""),
         ),
         ebs=EbsConfig(
             download_url=ebs_d.get("download_url", ""),

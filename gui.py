@@ -31,6 +31,7 @@ from dsno_processor.config import (
     AppConfig,
     ControlSheetColsConfig,
     CustomerSheetColsConfig,
+    CustomerSheetPropertiesConfig,
     CredentialsConfig,
     EbsConfig,
     EbsFoldersConfig,
@@ -2468,13 +2469,15 @@ class SettingsWindow(ctk.CTkToplevel):
     def _build_tab_columns(self, cfg) -> None:
         tab = self._tabview.tab(t("dl.section_columns"))
         form = self._make_form(tab)
-
-        self._tab_hint(
-            form,
-            t("settings.columns.hint"),
-        )
-
-        row = 1
+        row = 0
+        
+        ctk.CTkLabel(
+            form, text=t("settings.columns.control_columns_section"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            text_color=("#1f6aa5", "#3a9ad9"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 5))
+        row += 1
+        
         row = self._add_text_field(
             form, row, t("dl.invoice_column"), "ebs_col_invoice",
             (cfg.control_sheet_cols.invoice if cfg else "INVOICE"),
@@ -2498,7 +2501,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         # ── Customer Sheet Section ─────────────────────────────────
         ctk.CTkLabel(
-            form, text=t("settings.columns.customer_section"),
+            form, text=t("settings.columns.customer_columns_section"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             text_color=("#1f6aa5", "#3a9ad9"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 5))
@@ -2515,6 +2518,18 @@ class SettingsWindow(ctk.CTkToplevel):
         row = self._add_text_field(
             form, row, t("settings.columns.cust_container"), "cust_col_container",
             (cfg.customer_sheet_cols.container if cfg else "Container"),
+        )
+        
+        ctk.CTkLabel(
+            form, text=t("settings.columns.customer_config_section"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
+            text_color=("#1f6aa5", "#3a9ad9"),
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 5))
+        row += 1
+        row = self._add_text_field(
+            form, row, t("settings.columns.cust_sheet_name", default="Sheet Name"), "cust_sheet_name",
+            (cfg.customer_sheet_properties.sheet_name if cfg else ""),
+            hint=t("settings.columns.cust_sheet_name_hint", default="Leave empty to use the first sheet"),
         )
 
     def _build_tab_folders(self, cfg) -> None:
@@ -2796,6 +2811,9 @@ class SettingsWindow(ctk.CTkToplevel):
                 invoice=self._vars.get("cust_col_invoice", tk.StringVar(value="Invoice")).get(),
                 booking=self._vars.get("cust_col_booking", tk.StringVar(value="Booking/HAWB")).get(),
                 container=self._vars.get("cust_col_container", tk.StringVar(value="Container")).get(),
+            ),
+            customer_sheet_properties=CustomerSheetPropertiesConfig(
+                sheet_name=self._vars.get("cust_sheet_name", tk.StringVar(value="")).get(),
             ),
             ebs=EbsConfig(
                 download_url=self._vars["ebs_download_url"].get(),

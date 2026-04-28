@@ -23,7 +23,7 @@ _BOOKING_COL = cfg.BOOKING_COL
 _STATUS_COL = cfg.STATUS_COL
 
 # Required columns
-_REQUIRED_COLUMNS = {_INVOICE_COL, _CONTAINER_COL, _BOOKING_COL}
+_REQUIRED_COLUMNS = {_INVOICE_COL, _BOOKING_COL}
 
 def get_status_options(control_sheet_path: Path | str) -> list[str]:
     """Get status options for filtering."""
@@ -59,7 +59,16 @@ def get_dsno_info(invoice: int, customer_sheet_path: Path | str) -> DsnoInfo | N
     if not path.exists():
         raise SheetNotFoundError(f"Customer sheet not found: {path}")
 
-    df = pd.read_excel(path, sheet_name="Details")
+    # df = pd.read_excel(path, sheet_name="Details")
+    # Now looks for the first sheet or the configured sheet name
+    sheet_name = cfg.CUSTOMER_SHEET_NAME
+    if sheet_name:
+        try:
+            df = pd.read_excel(path, sheet_name=sheet_name)
+        except ValueError as exc:
+            raise SheetNotFoundError(f"Sheet '{sheet_name}' not found in {path.name}") from exc
+    else:
+        df = pd.read_excel(path)
 
     # Normalize headers (strip whitespace, collapse multiple spaces)
     df.columns = df.columns.str.strip().str.replace(r"\s+", " ", regex=True)
@@ -79,8 +88,8 @@ def get_dsno_info(invoice: int, customer_sheet_path: Path | str) -> DsnoInfo | N
         return None
 
     first = row.head(1).iloc[0]
-    container = str(first[_CONTAINER_COL])
-    booking = str(first[_BOOKING_COL])
+    booking =  str(first[_BOOKING_COL]) 
+    container = str(first[_CONTAINER_COL]) if _CONTAINER_COL in df.columns else ""
 
     return DsnoInfo(
         invoice=str(invoice),

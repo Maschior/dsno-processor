@@ -188,10 +188,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.columns.date_hint": "Name of the creation date column.",
         "settings.columns.status": "Status Column:",
         "settings.columns.status_hint": "Name of the status column.",
-        "settings.columns.customer_section": "Customer Sheet Columns",
+        "settings.columns.control_columns_section": "Control Sheet Columns",
+        "settings.columns.customer_columns_section": "Customer Sheet Columns",
+        "settings.columns.customer_config_section": "Customer Sheet Configuration",
         "settings.columns.cust_invoice": "Invoice:",
         "settings.columns.cust_booking": "Booking/HAWB:",
         "settings.columns.cust_container": "Container:",
+        "settings.columns.cust_sheet_name": "Sheet Name:",
+        "settings.columns.cust_sheet_name_hint": "Leave empty to use the first sheet. (NOTE: This is not the file name, but the sheet name.)",
 
         # ── Settings: Folders ───────────────────────────────────
         "settings.folders.hint": "Folder indices used by EBS for download and upload.",
@@ -372,10 +376,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.columns.date_hint": "Nome da coluna de data de criação.",
         "settings.columns.status": "Coluna Status:",
         "settings.columns.status_hint": "Nome da coluna de status.",
-        "settings.columns.customer_section": "Colunas da Planilha do Cliente",
+        "settings.columns.control_columns_section": "Colunas da Planilha de Controle",
+        "settings.columns.customer_columns_section": "Colunas da Planilha do Cliente",
+        "settings.columns.customer_config_section": "Configuração da Planilha do Cliente",
         "settings.columns.cust_invoice": "Invoice:",
         "settings.columns.cust_booking": "Booking/HAWB:",
         "settings.columns.cust_container": "Container:",
+        "settings.columns.cust_sheet_name": "Nome da Planilha:",
+        "settings.columns.cust_sheet_name_hint": "Deixe em branco para usar a primeira planilha. (OBS: Não é o nome do arquivo, mas da planilha dentro do arquivo)",
 
         # ── Settings: Folders ───────────────────────────────────
         "settings.folders.hint": "Índices de pastas usados pelo EBS para download e upload.",
