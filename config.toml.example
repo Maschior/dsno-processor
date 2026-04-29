@@ -20,6 +20,8 @@ invoice = "INVOICE"
 dsno = "ARGUMENT2"
 date = "CREATION_DATE"
 status = "STATUS"
+freight_oracle = "FREIGHT_ORACLE"
+freight_softway = "FREIGHT_SOFTWAY"
 
 [ebs]
 download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"

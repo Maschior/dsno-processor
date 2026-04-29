@@ -44,7 +44,7 @@ from dsno_processor.ebs_download import DownloadConfig, run_download
 from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import ConfigurationError, CanceledError, LoginError
 from dsno_processor.i18n import t, set_language, SUPPORTED_LANGUAGES
-from dsno_processor.info_reader import get_status_options
+from dsno_processor.invoice_reader import get_status_options, read_control_sheet
 
 # ── Logs ────────────────────────────────────────────────────────
 
@@ -1502,9 +1502,15 @@ class DSNOApp(ctk.CTk):
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
             anchor="w",
         ).pack(side="left", padx=(0, 6))
+        try:
+            sheet_df = read_control_sheet(default_control)
+            status_options = get_status_options(sheet_df)
+        except Exception:
+            status_options = []
+
         self.filter_by_status = MultiSelectDropdown(
             date_frame,
-            options=get_status_options(default_control),
+            options=status_options,
             placeholder="All",
         )
         self.filter_by_status.pack(side="left")

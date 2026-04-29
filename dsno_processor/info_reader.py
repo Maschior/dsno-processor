@@ -19,29 +19,17 @@ _INVOICE_COL = cfg.INVOICE_COL
 _CONTAINER_COL = cfg.CONTAINER_COL
 _BOOKING_COL = cfg.BOOKING_COL
 
-# Control sheet columns
-_STATUS_COL = cfg.STATUS_COL
-
 # Required columns
 _REQUIRED_COLUMNS = {_INVOICE_COL, _BOOKING_COL}
 
-def get_status_options(control_sheet_path: Path | str) -> list[str]:
-    """Get status options for filtering."""
-    path = Path(control_sheet_path)
+def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
+    """Read the customer sheet."""
+    path = Path(customer_sheet_path)
     if not path.exists():
-        return []
+        raise SheetNotFoundError(f"Customer sheet not found: {path}")
+    return pd.read_excel(path)
 
-    try:
-        df = pd.read_excel(path, usecols=[_STATUS_COL])
-        values = sorted(df[_STATUS_COL].dropna().unique().tolist())
-        return values if len(values) > 1 else []
-    except Exception as exc:
-        log.warning("Could not read status options from sheet: %s", exc)
-        return []
-
-
-
-def get_dsno_info(invoice: int, customer_sheet_path: Path | str) -> DsnoInfo | None:
+def get_dsno_info(invoice: int, customer_sheet: pd.DataFrame) -> DsnoInfo | None:
     """Look up shipping details for *invoice* in the customer spreadsheet.
 
     Args:
@@ -55,12 +43,7 @@ def get_dsno_info(invoice: int, customer_sheet_path: Path | str) -> DsnoInfo | N
         SheetNotFoundError: If the file does not exist.
         ColumnMissingError: If required columns are absent from the sheet.
     """
-    path = Path(customer_sheet_path)
-    if not path.exists():
-        raise SheetNotFoundError(f"Customer sheet not found: {path}")
-
-    # df = pd.read_excel(path, sheet_name="Details")
-    # Now looks for the first sheet or the configured sheet name
+    df = read_customer_sheet(customer_sheet_path)
     sheet_name = cfg.CUSTOMER_SHEET_NAME
     if sheet_name:
         try:

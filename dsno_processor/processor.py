@@ -7,14 +7,26 @@ from datetime import datetime
 from pathlib import Path
 
 from .editor import edit_navstar_dsno, move_to_processed, normalize_file, get_size
-from .exceptions import DsnoProcessorError, CanceledError
-from .info_reader import get_dsno_info
+from .exceptions import DsnoProcessorError, CanceledError, SheetNotFoundError, ColumnMissingError
+from .info_reader import get_dsno_info, read_customer_sheet
 from .invoice_reader import get_invoice_dsno_pairs
 from .models import DateRange, DsnoInfo, ProcessingResult
 from .status_updater import update_control_sheet_status
 
 log = logging.getLogger(__name__)
 
+class FreightType:
+    ORACLE = "ORACLE"
+    SOFTWAY = "SOFTWAY"
+
+    @classmethod
+    def from_string(cls, freight_type: str) -> str:
+        if freight_type.upper() == cls.ORACLE:
+            return cls.ORACLE
+        elif freight_type.upper() == cls.SOFTWAY:
+            return cls.SOFTWAY
+        else:
+            raise ValueError(f"Invalid freight type: {freight_type}")
 
 def setup_logger(log_dir: Path | str = "logs") -> None:
     """Configure root logger to write to a timestamped file.
@@ -43,7 +55,8 @@ def _process_single_dsno(
 ) -> str | None:
     """Process one DSNO file. Returns an error message on failure, else ``None``."""
     try:
-        info = get_dsno_info(invoice=invoice, customer_sheet_path=customer_sheet_path)
+        customer_sheet_df = read_customer_sheet(customer_sheet_path)
+        info = get_dsno_info(invoice, customer_sheet_df)
         
         if info is None:
             return f"Invoice {invoice} not found in customer sheet."
@@ -81,6 +94,12 @@ def _process_single_dsno(
         
     except CanceledError:
         raise
+    except SheetNotFoundError as exc:
+        log.exception(str(exc))
+        return str(exc)
+    except ColumnMissingError as exc:
+        log.exception(str(exc))
+        return str(exc)
     except Exception as exc:
         log.exception("Unexpected error processing %s: %s", dsno_path.name, exc)
         return f"Unexpected error: {exc}"
@@ -91,6 +110,7 @@ def process_dsno(
     customer_sheet: str,
     control_sheet: str,
     dsno_dir: str,
+    freight_type: str,
     progress_callback=None,
     cancel_event=None,
     status_filter: list[str] | None = None,
@@ -110,6 +130,8 @@ def process_dsno(
         cancel_event: Optional threading.Event to abort the operation.
         status_filter: Optional list of status values to include.
             An empty list or ``None`` means no filter (all statuses).
+        freight_type: Type of freight to use for processing.
+            Valid values: "", "ORACLE", "SOFTWAY".
 
     Returns:
         A :class:`ProcessingResult` with counts and error details.
@@ -144,7 +166,20 @@ def process_dsno(
         _cb("cancelled", {"name": "System", "detail": "Cancelled by user"})
         raise CanceledError("Cancelled by user")
 
-    pairs = get_invoice_dsno_pairs(parsed_range, control_sheet, status_filter=status_filter)
+    from .invoice_reader import read_control_sheet
+    try:
+        control_sheet_df = read_control_sheet(control_sheet)
+    except Exception as exc:
+        log.error("Failed to read control sheet: %s", exc)
+        _cb("error", {"name": "System", "detail": f"Failed to read control sheet: {exc}"})
+        return result
+
+    pairs = get_invoice_dsno_pairs(parsed_range, control_sheet_df, status_filter=status_filter)
+
+    if not pairs:
+        log.info("No DSNO files found matching the criteria.")
+        _cb("error", {"name": "System", "detail": "No DSNO files found matching the criteria."})
+        return result
 
     if cancel_event and cancel_event.is_set():
         log.info("Processing cancelled by user.")
@@ -156,7 +191,7 @@ def process_dsno(
     result.total = len(pairs)
     _cb("total", {"count": len(pairs)})
 
-    for invoice, dsno_filename in pairs:
+    for invoice, dsno_filename, oracle_freight, softway_freight in pairs:
         if cancel_event and cancel_event.is_set():
             log.info("Processing cancelled by user.")
             _cb("cancelled", {"name": "System", "detail": "Cancelled by user"})
@@ -166,6 +201,22 @@ def process_dsno(
         _cb("phase", {"text": f"Processing {dsno_path.name}..."})
         log.info("---- Processing DSNO: %s ----", dsno_path.name)
 
+        freight = ''
+        
+        if not softway_freight and not oracle_freight:
+            error = f"No freight information found for invoice {invoice}"
+            log.error("%s", error)
+            _cb("error", {"name": dsno_path.name, "detail": error})
+            continue
+        
+        if not oracle_freight:
+            log.info("Oracle freight is missing, using Softway freight: %s", softway_freight)
+            freight = softway_freight
+
+        if softway_freight and oracle_freight != softway_freight:
+            log.info("Oracle freight is different from Softway freight, using Softway freight: %s", softway_freight)
+            freight = softway_freight
+        
         error = _process_single_dsno(
             invoice=invoice,
             dsno_path=dsno_path,

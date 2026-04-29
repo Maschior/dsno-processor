@@ -13,16 +13,51 @@ from .models import DateRange
 
 log = logging.getLogger(__name__)
 
-# Column names in the control spreadsheet
-_DATE_COL = "CREATION_DATE"
-_DSNO_COL = "ARGUMENT2"
-_INVOICE_COL = "INVOICE"
-_STATUS_COL = "STATUS"
+cfg = load_config()
 
+# Column names in the control spreadsheet
+_DATE_COL = cfg.DATE_COL
+_DSNO_COL = cfg.DSNO_COL
+_INVOICE_COL = cfg.INVOICE_COL
+_STATUS_COL = cfg.STATUS_COL
+_FREIGHT_ORACLE_COL = cfg.FREIGHT_ORACLE_COL
+_FREIGHT_SOFTWAY_COL = cfg.FREIGHT_SOFTWAY_COL
+
+_REQUIRED_COLUMNS = {_DATE_COL, _DSNO_COL, _INVOICE_COL, _STATUS_COL, _FREIGHT_ORACLE_COL, _FREIGHT_SOFTWAY_COL}
+
+class FreightType:
+    ORACLE = "ORACLE"
+    SOFTWAY = "SOFTWAY"
+
+    @classmethod
+    def from_string(cls, freight_type: str) -> str:
+        if freight_type.upper() == cls.ORACLE:
+            return cls.ORACLE
+        elif freight_type.upper() == cls.SOFTWAY:
+            return cls.SOFTWAY
+        else:
+            raise ValueError(f"Invalid freight type: {freight_type}")
+
+
+def read_control_sheet(control_sheet_path: Path | str) -> pd.DataFrame:
+    """Read the control sheet."""
+    path = Path(control_sheet_path)
+    if not path.exists():
+        raise SheetNotFoundError(f"Control sheet not found at: {path}")
+    return pd.read_excel(path)
+
+def get_status_options(control_sheet: pd.DataFrame) -> list[str]:
+    """Get status options for filtering."""
+    try:
+        values = sorted(control_sheet[_STATUS_COL].dropna().unique().tolist())
+        return values if len(values) > 1 else []
+    except Exception as exc:
+        log.warning("Could not read status options from sheet: %s", exc)
+        return []
 
 def get_invoice_dsno_pairs(
     date_range: DateRange,
-    control_sheet_path: Path | str,
+    control_sheet: pd.DataFrame,
     status_filter: list[str] | None = None,
 ) -> list[tuple[int, str]]:
     """Return a list of ``(invoice, dsno_filename)`` pairs within *date_range*.
@@ -38,25 +73,28 @@ def get_invoice_dsno_pairs(
     Raises:
         SheetNotFoundError: If *control_sheet_path* does not exist.
     """
-    path = Path(control_sheet_path)
-    if not path.exists():
-        raise SheetNotFoundError(
-            f"Control ASN Navistar sheet not found at: {path}"
-        )
+    df = control_sheet
 
-    df = pd.read_excel(path)
+    missing = _REQUIRED_COLUMNS - set(df.columns)
+    if missing:
+        raise ColumnMissingError(
+            f"Missing columns in sheet: {missing}. "
+            "The column name might have changed — please check the sheet headers."
+        )
 
     # Ensure STATUS column exists so we don't get KeyError
     if _STATUS_COL not in df.columns:
         df[_STATUS_COL] = pd.NA
+    
+
 
     df[_DATE_COL] = pd.to_datetime(
         df[_DATE_COL], format="%m/%d/%Y %I:%M:%S %p", errors="coerce"
     )
 
     date_mask = (df[_DATE_COL] >= date_range.start) & (df[_DATE_COL] <= date_range.end)
+    mask = date_mask
     
-    has_status_filter = False
     if status_filter is not None and len(status_filter) > 0:
         if not isinstance(status_filter[0], str):
             raise ValueError("status_filter item must be a string")
@@ -70,16 +108,13 @@ def get_invoice_dsno_pairs(
             | (status_series == "")
             | (status_series == "nan")
         )
-        has_status_filter = True
-
-    if has_status_filter:
-        mask = date_mask & status_mask
-    else:
-        mask = date_mask
-    
+        mask = date_mask & status_mask    
+        
     df_filtered = df.loc[mask].dropna(subset=[_INVOICE_COL, _DSNO_COL])
 
     invoices = df_filtered[_INVOICE_COL].astype("Int64").tolist()
     dsnos = df_filtered[_DSNO_COL].astype(str).tolist()
+    oracle_freights = df_filtered[_FREIGHT_ORACLE_COL].tolist()
+    softway_freights = df_filtered[_FREIGHT_SOFTWAY_COL].tolist()
 
-    return list(zip(invoices, dsnos))
+    return list(zip(invoices, dsnos, oracle_freights, softway_freights))

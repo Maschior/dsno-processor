@@ -57,6 +57,8 @@ class ControlSheetColsConfig:
     dsno: str = "ARGUMENT2"
     date: str = "CREATION_DATE"
     status: str = "STATUS"
+    freight_oracle: str = "FREIGHT_ORACLE"
+    freight_softway: str = "FREIGHT_SOFTWAY"
 
 
 @dataclass
@@ -197,6 +199,16 @@ class AppConfig:
         return self.control_sheet_cols.status
 
     @property
+    def FREIGHT_ORACLE_COL(self) -> str:
+        """Column name for freight_oracle in the control sheet."""
+        return self.control_sheet_cols.freight_oracle
+
+    @property
+    def FREIGHT_SOFTWAY_COL(self) -> str:
+        """Column name for freight_softway in the control sheet."""
+        return self.control_sheet_cols.freight_softway
+
+    @property
     def ebs_download_url(self) -> str:
         return self.ebs.download_url
 
@@ -281,6 +293,8 @@ def _config_to_dict(config: AppConfig) -> dict:
                 "dsno": config.control_sheet_cols.dsno,
                 "date": config.control_sheet_cols.date,
                 "status": config.control_sheet_cols.status,
+                "freight_oracle": config.control_sheet_cols.freight_oracle,
+                "freight_softway": config.control_sheet_cols.freight_softway,
             },
         },
         "ebs": {
@@ -332,6 +346,8 @@ def _dict_to_config(data: dict) -> AppConfig:
             dsno=ctrl_cols_d.get("dsno", "ARGUMENT2"),
             date=ctrl_cols_d.get("date", "CREATION_DATE"),
             status=ctrl_cols_d.get("status", "STATUS"),
+            freight_oracle=ctrl_cols_d.get("freight_oracle", "FREIGHT_ORACLE"),
+            freight_softway=ctrl_cols_d.get("freight_softway", "FREIGHT_SOFTWAY"),
         ),
         customer_sheet_cols=CustomerSheetColsConfig(
             invoice=cust_cols_d.get("invoice", "Invoice"),
