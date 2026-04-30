@@ -44,7 +44,7 @@ from dsno_processor.ebs_download import DownloadConfig, run_download
 from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import ConfigurationError, CanceledError, LoginError
 from dsno_processor.i18n import t, set_language, SUPPORTED_LANGUAGES
-from dsno_processor.invoice_reader import get_status_options, read_control_sheet
+from dsno_processor.control_reader import get_status_options, read_control_sheet
 
 # ── Logs ────────────────────────────────────────────────────────
 
@@ -1515,6 +1515,24 @@ class DSNOApp(ctk.CTk):
         )
         self.filter_by_status.pack(side="left")
 
+        # Freight mode selector
+        ctk.CTkLabel(
+            date_frame,
+            text=t("proc.freight_mode"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=13),
+            anchor="w",
+        ).pack(side="left", padx=(16, 6))
+        self.freight_mode_var = ctk.StringVar(value=t("proc.sea"))
+        self.freight_mode_combo = ctk.CTkComboBox(
+            date_frame,
+            values=[t("proc.sea"), t("proc.air")],
+            variable=self.freight_mode_var,
+            width=100,
+            state="readonly",
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        )
+        self.freight_mode_combo.pack(side="left")
+
         # File pickers
         self.customer_row = FilePickerRow(
             tab,
@@ -1990,6 +2008,7 @@ class DSNOApp(ctk.CTk):
                 customer_sheet=self.customer_row.get(),
                 control_sheet=self.control_row.get(),
                 dsno_dir=self.dsno_row.get(),
+                freight_mode=self.freight_mode_var.get(),
                 progress_callback=self._make_progress_callback(),
                 cancel_event=getattr(self, "_processor_cancel_event", None),
                 status_filter=status_filter,

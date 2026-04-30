@@ -8,7 +8,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 try:
     from dsno_processor import __version__
 except ImportError:
-    __version__ = "1.1.0"
+    __version__ = "1.2.0"
 
 def run_command(command, shell=True):
     print(f"Executando: {command}")
