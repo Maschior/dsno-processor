@@ -20,25 +20,6 @@ from .models import DateRange
 
 log = logging.getLogger(__name__)
 
-cfg = load_config()
-
-# Column names in the control spreadsheet
-_DATE_COL = cfg.DATE_COL.upper()
-_DSNO_COL = cfg.DSNO_COL.upper()
-_INVOICE_COL = cfg.INVOICE_COL.upper()
-_STATUS_COL = cfg.STATUS_COL.upper()
-_FREIGHT_ORACLE_COL = cfg.FREIGHT_ORACLE_COL.upper()
-_FREIGHT_SOFTWAY_COL = cfg.FREIGHT_SOFTWAY_COL.upper()
-
-_REQUIRED_COLUMNS = {
-    _DATE_COL,
-    _DSNO_COL,
-    _INVOICE_COL,
-    _STATUS_COL,
-    _FREIGHT_ORACLE_COL,
-    _FREIGHT_SOFTWAY_COL,
-}
-
 
 # ── Sheet loading ────────────────────────────────────────────────────
 
@@ -56,7 +37,12 @@ def read_control_sheet(control_sheet_path: Path | str) -> pd.DataFrame:
     if not path.exists():
         raise SheetNotFoundError(f"Control sheet not found at: {path}")
     df = pd.read_excel(path)
-    df.columns = df.columns.str.strip().str.upper().str.replace(r"\s+", " ", regex=True)
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.upper()
+        .str.replace(r"\s+", " ", regex=True)
+    )
     return df
 
 
@@ -70,7 +56,10 @@ def get_status_options(control_sheet: pd.DataFrame) -> list[str]:
     Returns an empty list if fewer than two distinct values exist.
     """
     try:
-        values = sorted(control_sheet[_STATUS_COL].dropna().unique().tolist())
+
+        cfg = load_config()
+        status_col = cfg.STATUS_COL.upper()
+        values = sorted(control_sheet[status_col].dropna().unique().tolist())
         return values if len(values) > 1 else []
     except Exception as exc:
         log.warning("Could not read status options from sheet: %s", exc)
@@ -100,8 +89,25 @@ def get_invoice_dsno_pairs(
         ColumnMissingError: If required columns are absent from the sheet.
     """
     df = control_sheet
+    cfg = load_config()
 
-    missing = _REQUIRED_COLUMNS - set(df.columns)
+    date_col = cfg.DATE_COL.upper()
+    dsno_col = cfg.DSNO_COL.upper()
+    invoice_col = cfg.INVOICE_COL.upper()
+    status_col = cfg.STATUS_COL.upper()
+    oracle_col = cfg.FREIGHT_ORACLE_COL.upper()
+    softway_col = cfg.FREIGHT_SOFTWAY_COL.upper()
+
+    required = {
+        date_col,
+        dsno_col,
+        invoice_col,
+        status_col,
+        oracle_col,
+        softway_col,
+    }
+
+    missing = required - set(df.columns)
     if missing:
         raise ColumnMissingError(
             f"Missing columns in sheet: {missing}. "
@@ -109,14 +115,14 @@ def get_invoice_dsno_pairs(
         )
 
     # Ensure STATUS column exists so we don't get KeyError
-    if _STATUS_COL not in df.columns:
-        df[_STATUS_COL] = pd.NA
+    if status_col not in df.columns:
+        df[status_col] = pd.NA
 
-    df[_DATE_COL] = pd.to_datetime(
-        df[_DATE_COL], format="%m/%d/%Y %I:%M:%S %p", errors="coerce"
+    df[date_col] = pd.to_datetime(
+        df[date_col], format="%m/%d/%Y %I:%M:%S %p", errors="coerce"
     )
 
-    date_mask = (df[_DATE_COL] >= date_range.start) & (df[_DATE_COL] <= date_range.end)
+    date_mask = (df[date_col] >= date_range.start) & (df[date_col] <= date_range.end)
     mask = date_mask
 
     if status_filter is not None and len(status_filter) > 0:
@@ -125,20 +131,20 @@ def get_invoice_dsno_pairs(
         status_filter = [s.lower().strip() for s in status_filter]
 
         # Status filter: Only process allowed statuses or empty statuses
-        status_series = df[_STATUS_COL].astype(str).str.strip().str.lower()
+        status_series = df[status_col].astype(str).str.strip().str.lower()
         status_mask = (
-            df[_STATUS_COL].isna()
+            df[status_col].isna()
             | (status_series.isin(status_filter))
             | (status_series == "")
             | (status_series == "nan")
         )
         mask = date_mask & status_mask
 
-    df_filtered = df.loc[mask].dropna(subset=[_INVOICE_COL, _DSNO_COL])
+    df_filtered = df.loc[mask].dropna(subset=[invoice_col, dsno_col])
 
-    invoices = df_filtered[_INVOICE_COL].astype("Int64").tolist()
-    dsnos = df_filtered[_DSNO_COL].astype(str).tolist()
-    oracle_freights = df_filtered[_FREIGHT_ORACLE_COL].tolist()
-    softway_freights = df_filtered[_FREIGHT_SOFTWAY_COL].tolist()
+    invoices = df_filtered[invoice_col].astype("Int64").tolist()
+    dsnos = df_filtered[dsno_col].astype(str).tolist()
+    oracle_freights = df_filtered[oracle_col].tolist()
+    softway_freights = df_filtered[softway_col].tolist()
 
     return list(zip(invoices, dsnos, oracle_freights, softway_freights))
