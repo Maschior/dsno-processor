@@ -74,6 +74,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.dsno_directory": "DSNO Directory:",
         "proc.start_btn": "Start Processing",
         "proc.status": "Filter by Status:",
+        "proc.freight_mode": "Freight Mode:",
+        "proc.freight_mode_hint": "SEA/ROAD = prefer Softway when different. AIR = use Oracle.",
+        "proc.air": "AIR",
+        "proc.sea": "SEA/ROAD",
 
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Period",
@@ -262,6 +266,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.dsno_directory": "Diretório DSNO:",
         "proc.start_btn": "Iniciar Processamento",
         "proc.status": "Filtrar por Status:",
+        "proc.freight_mode": "Modo de Frete:",
+        "proc.freight_mode_hint": "MARÍTIMO/RODOVIÁRIO = prefere Softway quando diferente. AÉREO = usa Softway.",
+        "proc.air": "AÉREO",
+        "proc.sea": "MARÍTIMO/RODOVIÁRIO",
 
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Período",

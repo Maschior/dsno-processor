@@ -4,10 +4,47 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 
 import pandas as pd
 
 from .exceptions import InvalidDateRangeError
+
+
+class FreightMode(Enum):
+    """Freight transport mode selected by the user.
+
+    AIR — always use Oracle freight value.
+    SEA — when Softway and Oracle differ (and Softway is not null),
+           prefer the Softway value.
+    """
+
+    AIR = "AIR"
+    SEA = "SEA"
+    ROAD = "ROAD"
+
+    @classmethod
+    def _missing_(cls, value):
+        value_str = str(value).upper()
+        
+        translations = {
+            "AÉREO": cls.AIR,
+            "MARÍTIMO/RODOVIÁRIO": cls.SEA,
+            "SEA/ROAD": cls.SEA,
+        }
+        
+        if value_str in translations:
+            return translations[value_str]
+        
+        return super()._missing_(value)
+        
+    @classmethod
+    def from_string(cls, value: str) -> FreightMode:
+        """Parse a string into a FreightMode, case-insensitive."""
+        try:
+            return cls(value.upper())
+        except ValueError:
+            raise ValueError(f"Invalid freight mode: {value!r}. Must be 'AIR' or 'SEA'.")
 
 
 @dataclass(frozen=True)
