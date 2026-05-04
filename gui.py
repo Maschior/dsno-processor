@@ -37,6 +37,7 @@ from dsno_processor.config import (
     EbsFoldersConfig,
     GeneralConfig,
     PathsConfig,
+    ProcessorConfig,
     load_config,
     save_config,
 )
@@ -1033,15 +1034,16 @@ class ProgressDashboard(ctk.CTkFrame):
             # Keep the phase info visible at the end (don't show start button yet)
             self._phase_label.configure(image=self._empty_img)
             if self._cancelled:
-                self._phase_label.configure(text=f"Cancelled", text_color=("#c62828", "#ef5350"))
+                self._phase_label.configure(text=t("dash.cancelled"), text_color=("#c62828", "#ef5350"))
                 self._spinner_label.configure(text="⚠️")
             elif self._error_count > 0:
-                self._phase_label.configure(text=f"Completed with {self._error_count} error(s)", text_color=("#c62828", "#ef5350"))
+                self._phase_label.configure(text=t("dash.completed_errors", count=self._error_count), text_color=("#c62828", "#ef5350"))
                 self._spinner_label.configure(text="⚠️")
             else:
                 self._phase_label.configure(text=t("dash.completed_success"), text_color=("#2e7d32", "#66bb6a"))
                 self._spinner_label.configure(text="✅")
-            self._progress_bar.set(1)
+            # Keep progress consistent with success/total semantics
+            self._refresh()
         self.after(0, _do)
 
     def _tick_idle(self) -> None:
@@ -1074,9 +1076,11 @@ class ProgressDashboard(ctk.CTkFrame):
 
     def _refresh(self) -> None:
         if self._total > 0:
-            pct = self._done / self._total
+            # Progress bar should represent successful items, not total attempts.
+            # Failures/skips are still tracked in stats and cards.
+            pct = self._success_count / self._total
             self._progress_bar.set(pct)
-            self._progress_label.configure(text=f"{self._done} / {self._total}  ({int(pct * 100)}%)")
+            self._progress_label.configure(text=f"{self._success_count} / {self._total}  ({int(pct * 100)}%)")
         pending = max(0, self._total - self._done)
         self._stat_labels["success"].configure(text=str(self._success_count))
         self._stat_labels["error"].configure(text=str(self._error_count))
@@ -2262,6 +2266,7 @@ class SettingsWindow(ctk.CTkToplevel):
         self._TAB_NAMES = [
             t("settings.tab.general"),
             t("settings.tab.paths"),
+            t("settings.tab.processor"),
             t("settings.tab.ebs"),
             t("dl.section_columns"),
             t("dl.section_folders"),
@@ -2322,6 +2327,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         self._build_tab_general(cfg)
         self._build_tab_paths(cfg)
+        self._build_tab_processor(cfg)
         self._build_tab_ebs(cfg)
         self._build_tab_columns(cfg)
         self._build_tab_folders(cfg)
@@ -2433,6 +2439,40 @@ class SettingsWindow(ctk.CTkToplevel):
             mode="dir",
             hint=t("settings.paths.customer_pre_path_hint"),
         )
+
+    def _build_tab_processor(self, cfg) -> None:
+        tab = self._tabview.tab(t("settings.tab.processor"))
+        form = self._make_form(tab)
+
+        self._tab_hint(
+            form, t("settings.processor.hint")
+        )
+
+        # Bypass file size verification toggle
+        row = 1
+        self._hint_label(
+            form,
+            t("settings.processor.bypass_file_size_check_hint"),
+            row,
+        )
+        row += 1
+
+        ctk.CTkLabel(
+            form, text=t("settings.processor.bypass_file_size_check"), anchor="w", width=240,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+        ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
+
+        self._bypass_size_check_var = tk.BooleanVar(
+            value=bool(getattr(cfg, "processor", None).bypass_file_size_check) if cfg else False
+        )
+        ctk.CTkSwitch(
+            form,
+            text="",
+            variable=self._bypass_size_check_var,
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+            onvalue=True,
+            offvalue=False,
+        ).grid(row=row, column=1, sticky="w", pady=3, columnspan=2)
 
     def _build_tab_ebs(self, cfg) -> None:
         tab = self._tabview.tab(t("settings.tab.ebs"))
@@ -2824,6 +2864,11 @@ class SettingsWindow(ctk.CTkToplevel):
                 customer_sheet=_Path(self._vars["customer_sheet"].get()),
                 customer_sheet_pre_path=_Path(
                     self._vars["customer_sheet_pre_path"].get()
+                ),
+            ),
+            processor=ProcessorConfig(
+                bypass_file_size_check=bool(
+                    getattr(self, "_bypass_size_check_var", tk.BooleanVar(value=False)).get()
                 ),
             ),
             control_sheet_cols=ControlSheetColsConfig(

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 import time
+from pathlib import Path
 
 import pandas as pd
 
@@ -20,15 +20,68 @@ from .models import DsnoInfo
 
 log = logging.getLogger(__name__)
 
-# ── Sheet loading ────────────────────────────────────────────────────
+# region agent log helpers (debug-1ca7c5)
+_DEBUG_LOG_PATH = "debug-1ca7c5.log"
+_DEBUG_SESSION_ID = "1ca7c5"
 
+
+def _append_debug_log(
+    *, runId: str, hypothesisId: str, location: str, message: str, data: dict
+) -> None:
+    try:
+        payload = {
+            "sessionId": _DEBUG_SESSION_ID,
+            "runId": runId,
+            "hypothesisId": hypothesisId,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        return
+
+
+def _suspicious_chars(s: str) -> list[str]:
+    out: list[str] = []
+    for ch in s:
+        o = ord(ch)
+        if o > 127:
+            out.append(f"U+{o:04X}")
+    return out
+
+
+def _col_signature(cols: list[object], *, limit: int = 80) -> list[dict]:
+    sig: list[dict] = []
+    for c in cols[:limit]:
+        s = str(c)
+        sig.append(
+            {
+                "text": s[:200],
+                "repr": repr(s)[:220],
+                "len": len(s),
+                "suspicious": _suspicious_chars(s)[:20],
+                "has_nbsp": ("\u00A0" in s),
+                "has_slash": ("/" in s),
+                "has_backslash": ("\\" in s),
+            }
+        )
+    return sig
+
+
+# endregion
+
+
+# ── Sheet loading ────────────────────────────────────────────────────
 
 
 def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
     """Read the customer spreadsheet into a DataFrame.
 
     Respects the ``CUSTOMER_SHEET_NAME`` config value: when set, that
-    specific worksheet is loaded; otherwise the first sheet is used.
+    specific worksheet is loaded; otherwise a sheet is auto-detected.
 
     Args:
         customer_sheet_path: Path to the customer Excel file.
@@ -44,13 +97,13 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
     sheet_name = cfg.CUSTOMER_SHEET_NAME
     required = {cfg.INVOICE_COL.upper(), cfg.BOOKING_COL.upper()}
 
-    # When sheet_name isn't configured, Excel files often have a blank "cover" as the first sheet.
-    # We auto-detect the first sheet that contains the required columns after normalization.
+    # Excel files often have a blank "cover" as the first sheet.
+    # If sheet_name isn't configured, scan sheets and pick the first
+    # that contains required columns after normalization.
     try:
         xls = pd.ExcelFile(path)
         sheet_names = list(xls.sheet_names)
     except Exception:
-        xls = None
         sheet_names = []
 
     _append_debug_log(
@@ -67,8 +120,16 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
         },
     )
 
+    def _normalize_cols(cols: pd.Index) -> pd.Index:
+        return (
+            cols.astype(str)
+            .str.strip()
+            .str.upper()
+            .str.replace(r"\s+", " ", regex=True)
+        )
+
     def _read_one(name: str | int | None) -> pd.DataFrame:
-        return pd.read_excel(path, sheet_name=name)  # default header=0
+        return pd.read_excel(path, sheet_name=name)  # header=0 by default
 
     if sheet_name:
         try:
@@ -78,43 +139,30 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
                 f"Sheet '{sheet_name}' not found in {path.name}"
             ) from exc
     else:
+        # Start with first sheet then scan if required columns missing
         df = _read_one(0)
-
-        # If the first sheet doesn't have the required columns, scan others.
-        if sheet_names:
-            # Normalize current read and check quickly
-            probe_cols = (
-                df.columns.astype(str)
-                .str.strip()
-                .str.upper()
-                .str.replace(r"\\s+", " ", regex=True)
-            )
-            if required - set(probe_cols):
-                for name in sheet_names[1:]:
-                    candidate = _read_one(name)
-                    cand_cols = (
-                        candidate.columns.astype(str)
-                        .str.strip()
-                        .str.upper()
-                        .str.replace(r"\\s+", " ", regex=True)
-                    )
-                    miss = required - set(cand_cols)
-                    _append_debug_log(
-                        runId="pre-fix",
-                        hypothesisId="H4",
-                        location="dsno_processor/customer_reader.py:read_customer_sheet(scan)",
-                        message="Scanning sheet for required columns",
-                        data={
-                            "sheet_name": str(name),
-                            "nrows": int(getattr(candidate, "shape", (0, 0))[0]),
-                            "ncols": int(getattr(candidate, "shape", (0, 0))[1]),
-                            "missing_required": sorted(miss),
-                        },
-                    )
-                    if not miss:
-                        df = candidate
-                        sheet_name = str(name)
-                        break
+        probe_cols = _normalize_cols(df.columns)
+        if sheet_names and (required - set(probe_cols)):
+            for name in sheet_names[1:]:
+                candidate = _read_one(name)
+                cand_cols = _normalize_cols(candidate.columns)
+                miss = required - set(cand_cols)
+                _append_debug_log(
+                    runId="pre-fix",
+                    hypothesisId="H4",
+                    location="dsno_processor/customer_reader.py:read_customer_sheet(scan)",
+                    message="Scanning sheet for required columns",
+                    data={
+                        "sheet_name": str(name),
+                        "nrows": int(getattr(candidate, "shape", (0, 0))[0]),
+                        "ncols": int(getattr(candidate, "shape", (0, 0))[1]),
+                        "missing_required": sorted(miss),
+                    },
+                )
+                if not miss:
+                    df = candidate
+                    sheet_name = str(name)
+                    break
 
     _append_debug_log(
         runId="pre-fix",
@@ -130,12 +178,7 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
     )
 
     # Normalize headers (strip whitespace, uppercase, collapse multiple spaces)
-    df.columns = (
-        df.columns.astype(str)
-        .str.strip()
-        .str.upper()
-        .str.replace(r"\s+", " ", regex=True)
-    )
+    df.columns = _normalize_cols(df.columns)
 
     _append_debug_log(
         runId="pre-fix",
@@ -173,7 +216,7 @@ def get_dsno_info(invoice: int, customer_sheet: pd.DataFrame) -> DsnoInfo | None
     booking_col = cfg.BOOKING_COL.upper()
     container_col = cfg.CONTAINER_COL.upper()
     required = {invoice_col, booking_col}
-    
+
     missing = required - set(df.columns)
     if missing:
         _append_debug_log(

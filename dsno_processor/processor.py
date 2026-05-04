@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .control_reader import get_invoice_dsno_pairs, read_control_sheet
 from .customer_reader import get_dsno_info, read_customer_sheet
+from .config import load_config
 from .editor import edit_navstar_dsno, move_to_processed, normalize_file, get_size
 from .exceptions import CanceledError, ColumnMissingError, DsnoProcessorError, SheetNotFoundError
 from .models import DateRange, DsnoInfo, FreightMode, ProcessingResult
@@ -68,6 +69,10 @@ def _resolve_freight(
     oracle = _clean(oracle_freight)
     softway = _clean(softway_freight)
 
+    # Essa linha de código só existe devido a um erro de digitação no cadastro do tipo de frete dentro do próprio banco de dados
+    if oracle == "MARITMO" and softway == "MARITIMA":
+        oracle = "MARITIMA"
+
     if not oracle and not softway:
         error = 'No freight information available.'
         log.error(error)
@@ -102,6 +107,7 @@ def _process_single_dsno(
 ) -> str | None:
     """Process one DSNO file. Returns an error message on failure, else ``None``."""
     try:
+        cfg = load_config()
         customer_sheet_df = read_customer_sheet(customer_sheet_path)
         info = get_dsno_info(invoice, customer_sheet_df)
 
@@ -134,7 +140,7 @@ def _process_single_dsno(
 
         new_size = get_size(dsno_path)
 
-        if new_size == original_size:
+        if new_size == original_size and not cfg.BYPASS_FILE_SIZE_CHECK:
             return f"File size unchanged after processing: {dsno_path.name}"
 
         return None

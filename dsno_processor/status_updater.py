@@ -103,6 +103,10 @@ def update_control_sheet_status(
             log.info("No new rows required STATUS update.")
 
         return updates_made
+    except PermissionError as exc:
+        log.error("Permission error while updating control sheet: %s", exc)
+        log.error("Please close the control sheet if it is open and try again.")
+        return 0
     except Exception as exc:
         log.exception("Failed to update status in control sheet: %s", exc)
         return 0

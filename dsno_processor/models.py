@@ -29,7 +29,10 @@ class FreightMode(Enum):
         
         translations = {
             "AÉREO": cls.AIR,
+            "AEREO": cls.AIR,
             "MARÍTIMO/RODOVIÁRIO": cls.SEA,
+            "MARITIMO": cls.SEA,
+            "MARITIMA": cls.SEA,
             "SEA/ROAD": cls.SEA,
         }
         

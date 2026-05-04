@@ -25,6 +25,7 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.common.exceptions import StaleElementReferenceException
 
 from .exceptions import ConfigurationError, CanceledError, LoginError
+from .i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -689,7 +690,7 @@ def run_download(config: DownloadConfig, progress_callback=None, cancel_event=No
                 record_success(history, filename, config.download_dir)
                 logger.info("Download started!")
                 success_count += 1
-                _cb("success", {"name": filename})
+                _cb("success", {"name": filename, "detail": t("dash.downloaded")})
             else:
                 logger.warning(
                     "Not found in any of the %d folders.", len(config.folder_indices)

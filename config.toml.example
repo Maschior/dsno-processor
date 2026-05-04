@@ -7,6 +7,9 @@ control_sheet = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\Control ASN Navis
 customer_sheet = "."
 customer_sheet_pre_path = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR"
 
+[processor]
+bypass_file_size_check = false
+
 [customer_sheet.cols]
 invoice = "Invoice"
 booking = "Booking/HAWB"
@@ -28,7 +31,7 @@ download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&r
 upload_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
 download_dir = "."
 upload_dir = "."
-headless = true
+headless = false
 
 [ebs.folders]
 download_indices = [

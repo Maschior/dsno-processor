@@ -124,8 +124,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dash.skipped": "Skipped",
         "dash.pending": "Pending",
         "dash.processed": "Processed",
+        "dash.downloaded": "Downloaded",
         "dash.show_logs": "Show Logs",
         "dash.hide_logs": "Hide Logs",
+        "dash.cancelled": "Cancelled",
         "dash.completed_success": "Completed successfully!",
         "dash.completed_errors": "Completed with {count} error(s)",
 
@@ -168,6 +170,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Settings that control the processing behaviour.",
+        "settings.processor.bypass_file_size_check": "Bypass file size verification:",
+        "settings.processor.bypass_file_size_check_hint": "If enabled, processing will not fail when the output file size is unchanged (useful for tests).",
 
         # ── Settings: EBS ───────────────────────────────────────
         "settings.ebs.hint": "Oracle EBS URLs and directories for download and upload.",
@@ -316,8 +320,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dash.skipped": "Ignorados",
         "dash.pending": "Pendentes",
         "dash.processed": "Processado",
+        "dash.downloaded": "Baixado",
         "dash.show_logs": "Mostrar Logs",
         "dash.hide_logs": "Ocultar Logs",
+        "dash.cancelled": "Cancelado",
         "dash.completed_success": "Concluído com sucesso!",
         "dash.completed_errors": "Concluído com {count} erro(s)",
 
@@ -360,6 +366,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Configurações que controlam o comportamento do processamento.",
+        "settings.processor.bypass_file_size_check": "Ignorar verificação de tamanho do arquivo:",
+        "settings.processor.bypass_file_size_check_hint": "Se ativado, o processamento não falhará quando o tamanho do arquivo não mudar (útil para testes).",
 
         # ── Settings: EBS ───────────────────────────────────────
         "settings.ebs.hint": "URLs e diretórios do Oracle EBS para download e upload.",

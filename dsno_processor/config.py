@@ -104,6 +104,13 @@ class CredentialsConfig:
     password: str = ""
 
 
+@dataclass
+class ProcessorConfig:
+    """Settings that control DSNO processing behaviour."""
+
+    bypass_file_size_check: bool = False
+
+
 # ── Main config ──────────────────────────────────────────────────────
 
 
@@ -120,6 +127,7 @@ class AppConfig:
 
     general: GeneralConfig = field(default_factory=GeneralConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
+    processor: ProcessorConfig = field(default_factory=ProcessorConfig)
     control_sheet_cols: ControlSheetColsConfig = field(
         default_factory=ControlSheetColsConfig
     )
@@ -158,6 +166,11 @@ class AppConfig:
     @property
     def CUSTOMER_SHEET_NAME(self) -> str:
         return self.customer_sheet_properties.sheet_name
+
+    @property
+    def BYPASS_FILE_SIZE_CHECK(self) -> bool:
+        """If True, do not fail when DSNO file size is unchanged after processing."""
+        return bool(self.processor.bypass_file_size_check)
 
     @property
     def customer_sheet_pre_path(self) -> Path:
@@ -277,6 +290,9 @@ def _config_to_dict(config: AppConfig) -> dict:
             "customer_sheet": str(config.paths.customer_sheet),
             "customer_sheet_pre_path": str(config.paths.customer_sheet_pre_path),
         },
+        "processor": {
+            "bypass_file_size_check": bool(config.processor.bypass_file_size_check),
+        },
         "customer_sheet": {
             "cols": {
                 "invoice": config.customer_sheet_cols.invoice,
@@ -319,6 +335,7 @@ def _dict_to_config(data: dict) -> AppConfig:
     """Build an :class:`AppConfig` from a parsed TOML dict."""
     gen_d = data.get("general", {})
     paths_d = data.get("paths", {})
+    proc_d = data.get("processor", {})
     cust_sheet_d = data.get("customer_sheet", {})
     cust_cols_d = cust_sheet_d.get("cols", {})
     ctrl_sheet_d = data.get("control_sheet", {})
@@ -340,6 +357,9 @@ def _dict_to_config(data: dict) -> AppConfig:
             customer_sheet_pre_path=Path(
                 paths_d.get("customer_sheet_pre_path", "")
             ),
+        ),
+        processor=ProcessorConfig(
+            bypass_file_size_check=bool(proc_d.get("bypass_file_size_check", False)),
         ),
         control_sheet_cols=ControlSheetColsConfig(
             invoice=ctrl_cols_d.get("invoice", "INVOICE"),
@@ -418,6 +438,9 @@ def _migrate_ini_to_toml(
             customer_sheet_pre_path=Path(
                 paths_sec.get("CUSTOMER_SHEET_PRE_PATH", "")
             ),
+        ),
+        processor=ProcessorConfig(
+            bypass_file_size_check=False,
         ),
         control_sheet_cols=ControlSheetColsConfig(
             invoice="INVOICE",
