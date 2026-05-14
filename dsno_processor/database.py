@@ -42,6 +42,7 @@ class ControlRecord:
     status: str | None = None
     freight_oracle: str | None = None
     freight_softway: str | None = None
+    description: str | None = None
 
 
 @dataclass
@@ -69,7 +70,8 @@ CREATE TABLE IF NOT EXISTS tb_control (
     CREATION_DATE   TIMESTAMP NOT NULL,
     STATUS          VARCHAR,
     FREIGHT_ORACLE  VARCHAR,
-    FREIGHT_SOFTWAY VARCHAR
+    FREIGHT_SOFTWAY VARCHAR,
+    DESCRIPTION     VARCHAR
 );
 
 CREATE INDEX IF NOT EXISTS idx_control_delivery_id
@@ -119,6 +121,13 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection) -> None:
     """Create tables if they do not already exist."""
     conn.executescript(_SCHEMA_SQL)
+    
+    # Simple migration: add DESCRIPTION column if it doesn't exist
+    try:
+        conn.execute("ALTER TABLE tb_control ADD COLUMN DESCRIPTION VARCHAR")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+        
     log.info("Database schema initialized.")
 
 
@@ -131,13 +140,14 @@ def insert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
         """
         INSERT INTO tb_control
             (DELIVERY_ID, INVOICE, DSNO_FILENAME, CREATION_DATE,
-             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record.delivery_id, record.invoice, record.dsno_filename,
             record.creation_date, record.status,
             record.freight_oracle, record.freight_softway,
+            record.description,
         ),
     )
     conn.commit()
@@ -150,20 +160,22 @@ def upsert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
         """
         INSERT INTO tb_control
             (DELIVERY_ID, INVOICE, DSNO_FILENAME, CREATION_DATE,
-             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (DSNO_FILENAME) DO UPDATE SET
             DELIVERY_ID     = COALESCE(excluded.DELIVERY_ID, tb_control.DELIVERY_ID),
             INVOICE         = excluded.INVOICE,
             CREATION_DATE   = excluded.CREATION_DATE,
             STATUS          = COALESCE(excluded.STATUS, tb_control.STATUS),
             FREIGHT_ORACLE  = COALESCE(excluded.FREIGHT_ORACLE, tb_control.FREIGHT_ORACLE),
-            FREIGHT_SOFTWAY = COALESCE(excluded.FREIGHT_SOFTWAY, tb_control.FREIGHT_SOFTWAY)
+            FREIGHT_SOFTWAY = COALESCE(excluded.FREIGHT_SOFTWAY, tb_control.FREIGHT_SOFTWAY),
+            DESCRIPTION     = COALESCE(excluded.DESCRIPTION, tb_control.DESCRIPTION)
         """,
         (
             record.delivery_id, record.invoice, record.dsno_filename,
             record.creation_date, record.status,
             record.freight_oracle, record.freight_softway,
+            record.description,
         ),
     )
     conn.commit()
@@ -466,6 +478,7 @@ def import_control_sheet(
     status_col: str | None = None,
     oracle_freight_col: str | None = None,
     softway_freight_col: str | None = None,
+    description_col: str | None = None,
     sheet_name: str | int | None = None,
 ) -> tuple[int, int]:
     """Import rows from a control spreadsheet into ``tb_control``.
@@ -479,6 +492,7 @@ def import_control_sheet(
         status_col: Column name for status.
         oracle_freight_col: Column name for Oracle freight.
         softway_freight_col: Column name for Softway freight.
+        description_col: Column name for description/obs.
         sheet_name: Specific worksheet name/index.
 
     Returns:
@@ -513,6 +527,7 @@ def import_control_sheet(
     stat_col = (status_col or cfg.STATUS_COL).upper()
     ora_col = (oracle_freight_col or cfg.FREIGHT_ORACLE_COL).upper()
     sft_col = (softway_freight_col or cfg.FREIGHT_SOFTWAY_COL).upper()
+    desc_col = (description_col or cfg.DESCRIPTION_COL).upper()
 
     required = {inv_col, dsno_c, dt_col}
     missing = required - set(df.columns)
@@ -523,11 +538,14 @@ def import_control_sheet(
     skipped = 0
 
     # Ensure optional columns exist
-    for col in [stat_col, ora_col, sft_col]:
+    for col in [stat_col, ora_col, sft_col, desc_col]:
         if col not in df.columns:
             df[col] = pd.NA
 
     df[dt_col] = pd.to_datetime(df[dt_col], errors="coerce")
+
+    # Garante que não haverá DSNO repetidos importados da planilha
+    df = df.drop_duplicates(subset=[dsno_c], keep='first')
 
     for _, row in df.iterrows():
         invoice_val = row.get(inv_col)
@@ -542,6 +560,7 @@ def import_control_sheet(
         stat_val = str(row.get(stat_col, "")).strip()
         ora_val = str(row.get(ora_col, "")).strip()
         sft_val = str(row.get(sft_col, "")).strip()
+        desc_val = str(row.get(desc_col, "")).strip()
 
         if stat_val.lower() in ("nan", "nat", ""):
             stat_val = ""
@@ -549,6 +568,8 @@ def import_control_sheet(
             ora_val = ""
         if sft_val.lower() in ("nan", "nat", ""):
             sft_val = ""
+        if desc_val.lower() in ("nan", "nat", ""):
+            desc_val = ""
 
         record = ControlRecord(
             invoice=int(invoice_val),
@@ -557,6 +578,7 @@ def import_control_sheet(
             status=stat_val,
             freight_oracle=ora_val,
             freight_softway=sft_val,
+            description=desc_val,
         )
         try:
             upsert_control_record(conn, record)

@@ -142,6 +142,9 @@ def get_invoice_dsno_pairs(
 
     df_filtered = df.loc[mask].dropna(subset=[invoice_col, dsno_col])
 
+    # Remove duplicatas da coluna DSNO_FILENAME
+    df_filtered = df_filtered.drop_duplicates(subset=[dsno_col], keep='first')
+
     invoices = df_filtered[invoice_col].astype("Int64").tolist()
     dsnos = df_filtered[dsno_col].astype(str).tolist()
     oracle_freights = df_filtered[oracle_col].tolist()

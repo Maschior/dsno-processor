@@ -60,6 +60,7 @@ class ControlSheetColsConfig:
     status: str = "STATUS"
     freight_oracle: str = "FREIGHT_ORACLE"
     freight_softway: str = "FREIGHT_SOFTWAY"
+    description: str = "Obs"
 
 
 @dataclass
@@ -231,6 +232,11 @@ class AppConfig:
         return self.control_sheet_cols.freight_softway
 
     @property
+    def DESCRIPTION_COL(self) -> str:
+        """Column name for description in the control sheet."""
+        return self.control_sheet_cols.description
+
+    @property
     def ebs_download_url(self) -> str:
         return self.ebs.download_url
 
@@ -321,6 +327,7 @@ def _config_to_dict(config: AppConfig) -> dict:
                 "status": config.control_sheet_cols.status,
                 "freight_oracle": config.control_sheet_cols.freight_oracle,
                 "freight_softway": config.control_sheet_cols.freight_softway,
+                "description": config.control_sheet_cols.description,
             },
         },
         "ebs": {
@@ -379,6 +386,7 @@ def _dict_to_config(data: dict) -> AppConfig:
             status=ctrl_cols_d.get("status", "STATUS"),
             freight_oracle=ctrl_cols_d.get("freight_oracle", "FREIGHT_ORACLE"),
             freight_softway=ctrl_cols_d.get("freight_softway", "FREIGHT_SOFTWAY"),
+            description=ctrl_cols_d.get("description", "Obs"),
         ),
         customer_sheet_cols=CustomerSheetColsConfig(
             invoice=cust_cols_d.get("invoice", "Invoice"),
@@ -459,6 +467,7 @@ def _migrate_ini_to_toml(
             dsno=ebs_sec.get("DSNO_COL", "ARGUMENT2"),
             date=ebs_sec.get("DATE_COL", "CREATION_DATE"),
             status=ebs_sec.get("STATUS_COL", "STATUS"),
+            description="Obs",
         ),
         customer_sheet_cols=CustomerSheetColsConfig(
             invoice="Invoice",

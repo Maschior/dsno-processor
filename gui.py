@@ -1743,7 +1743,7 @@ class DSNOApp(ctk.CTk):
             command=self._browse_dl_dir,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
         ).grid(row=row, column=2, padx=(4, 6), pady=4); row += 1
-        _lbl(t("proc.customer_sheet"), row)
+        _lbl(t("proc.control_sheet"), row)
         self.dl_sheet_var, _ = _ent(row, str(cfg.control_sheet) if cfg and str(cfg.control_sheet) != "." else "", placeholder="C:\\...")
         ctk.CTkButton(form, text=t("btn.browse"), width=70,
             command=self._browse_dl_sheet,
@@ -2631,6 +2631,11 @@ class SettingsWindow(ctk.CTkToplevel):
             (cfg.control_sheet_cols.status if cfg else "STATUS"),
             hint=t("settings.columns.status_hint"),
         )
+        row = self._add_text_field(
+            form, row, t("dl.description_column"), "ebs_col_description",
+            (cfg.control_sheet_cols.description if cfg else "Obs"),
+            hint=t("settings.columns.description_hint"),
+        )
 
         # ── Customer Sheet Section ─────────────────────────────────
         ctk.CTkLabel(
@@ -2949,6 +2954,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 dsno=self._vars.get("ebs_col_dsno", tk.StringVar(value="ARGUMENT2")).get(),
                 date=self._vars.get("ebs_col_date", tk.StringVar(value="CREATION_DATE")).get(),
                 status=self._vars.get("ebs_col_status", tk.StringVar(value="STATUS")).get(),
+                description=self._vars.get("ebs_col_description", tk.StringVar(value="Obs")).get(),
             ),
             customer_sheet_cols=CustomerSheetColsConfig(
                 invoice=self._vars.get("cust_col_invoice", tk.StringVar(value="Invoice")).get(),
@@ -3242,6 +3248,7 @@ class ImportControlWizard(ctk.CTkToplevel):
             status_col = cfg.STATUS_COL if cfg else None
             oracle_freight_col = cfg.FREIGHT_ORACLE_COL if cfg else None
             softway_freight_col = cfg.FREIGHT_SOFTWAY_COL if cfg else None
+            description_col = cfg.DESCRIPTION_COL if cfg else None
 
             from dsno_processor.database import get_db_path, get_connection, init_db
             from dsno_processor.database import import_control_sheet as db_import_control_sheet
@@ -3258,6 +3265,7 @@ class ImportControlWizard(ctk.CTkToplevel):
                 status_col=status_col,
                 oracle_freight_col=oracle_freight_col,
                 softway_freight_col=softway_freight_col,
+                description_col=description_col,
             )
             conn.close()
 

@@ -160,6 +160,11 @@ def main() -> None:
         help="Column name for Softway freight (defaults to config.toml).",
     )
     parser.add_argument(
+        "--description-col",
+        default=None,
+        help="Column name for description/Obs (defaults to config.toml).",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="List files that would be imported without actually importing.",
@@ -238,6 +243,7 @@ def main() -> None:
                 status_col=args.status_col,
                 oracle_freight_col=args.oracle_col,
                 softway_freight_col=args.softway_col,
+                description_col=args.description_col,
             )
             total_imported += imported
             total_skipped += skipped
