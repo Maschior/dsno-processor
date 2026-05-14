@@ -154,8 +154,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── Settings: General ───────────────────────────────────
         "settings.general.hint": "General application preferences.",
         "settings.general.language": "Language:",
-        "settings.general.language_hint": "Select the interface language. Requires restart.",
+        "settings.general.language_hint": "Changes the interface language. Requires a restart.",
         "settings.general.restart_msg": "Language changed. Please restart the application for the change to take effect.",
+        "settings.general.data_source": "Data Source:",
+        "settings.general.data_source_hint": "Select where to read/write DSNO data: directly from spreadsheets or via the local database.",
+        "settings.data_source.spreadsheet": "Spreadsheet",
+        "settings.data_source.database": "Database",
 
         # ── Settings: Paths ─────────────────────────────────────
         "settings.paths.hint": "Directories and files used by the DSNO processor.",
@@ -236,6 +240,25 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "msg.download_complete": "Download complete: {success}/{total} successful.",
         "msg.upload_complete": "Upload complete: {success}/{total} successful.",
         "msg.cancelling": "Cancelling...\nPlease wait.",
+
+        # ── Import wizard ──────────────────────────────────────
+        "import.title": "Import Customer Sheet",
+        "import.select_file": "Select File:",
+        "import.btn_import": "Import",
+        "import.importing": "Importing...",
+        "import.success": "Import complete: {imported} record(s) imported, {skipped} skipped.",
+        "import.error": "Import failed: {error}",
+        "import.no_file": "Please select a file first.",
+        "import.btn_label": "Import Customer Sheet to DB",
+        
+        "import_control.title": "Import Control Sheet",
+        "import_control.select_file": "Select File:",
+        "import_control.btn_import": "Import",
+        "import_control.importing": "Importing...",
+        "import_control.success": "Import complete: {imported} record(s) imported, {skipped} skipped.",
+        "import_control.error": "Import failed: {error}",
+        "import_control.no_file": "Please select a file first.",
+        "import_control.btn_label": "Import Control Sheet to DB",
     },
 
     # ══════════════════════════════════════════════════════════════
@@ -350,8 +373,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── Settings: General ───────────────────────────────────
         "settings.general.hint": "Preferências gerais do aplicativo.",
         "settings.general.language": "Idioma:",
-        "settings.general.language_hint": "Selecione o idioma da interface. Requer reinício.",
+        "settings.general.language_hint": "Altera o idioma da interface. Requer reinicialização.",
         "settings.general.restart_msg": "Idioma alterado. Por favor, reinicie o aplicativo para que a alteração tenha efeito.",
+        "settings.general.data_source": "Fonte de Dados:",
+        "settings.general.data_source_hint": "Selecione onde ler/gravar dados do DSNO: diretamente nas planilhas ou através do banco de dados local.",
+        "settings.data_source.spreadsheet": "Planilha",
+        "settings.data_source.database": "Banco de Dados",
 
         # ── Settings: Paths ─────────────────────────────────────
         "settings.paths.hint": "Diretórios e arquivos utilizados pelo processador DSNO.",
@@ -432,6 +459,25 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "msg.download_complete": "Download concluído: {success}/{total} com sucesso.",
         "msg.upload_complete": "Upload concluído: {success}/{total} com sucesso.",
         "msg.cancelling": "Cancelando...\nPor favor, aguarde.",
+
+        # ── Import wizard ──────────────────────────────────────
+        "import.title": "Importar Planilha do Cliente",
+        "import.select_file": "Selecionar Arquivo:",
+        "import.btn_import": "Importar",
+        "import.importing": "Importando...",
+        "import.success": "Importação concluída: {imported} registro(s) importados, {skipped} ignorados.",
+        "import.error": "Falha na importação: {error}",
+        "import.no_file": "Selecione um arquivo primeiro.",
+        "import.btn_label": "Importar Planilha do Cliente para DB",
+        
+        "import_control.title": "Importar Planilha de Controle",
+        "import_control.select_file": "Selecionar Arquivo:",
+        "import_control.btn_import": "Importar",
+        "import_control.importing": "Importando...",
+        "import_control.success": "Importação concluída: {imported} registro(s) importados, {skipped} ignorados.",
+        "import_control.error": "Falha na importação: {error}",
+        "import_control.no_file": "Selecione um arquivo primeiro.",
+        "import_control.btn_label": "Importar Planilha de Controle para DB",
     },
 }
 

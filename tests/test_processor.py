@@ -93,6 +93,7 @@ class TestProcessSingleDsno:
 
         return _process_single_dsno(invoice, dsno_path, customer_sheet_path)
 
+    @patch("dsno_processor.processor._lookup_shipment_from_db", return_value=None)
     @patch("dsno_processor.processor.get_size")
     @patch("dsno_processor.processor.normalize_file")
     @patch("dsno_processor.processor.edit_navstar_dsno")
@@ -105,6 +106,7 @@ class TestProcessSingleDsno:
         mock_edit,
         mock_normalize,
         mock_size,
+        mock_db,
         tmp_path: Path,
     ):
         dsno_path = tmp_path / "DSNO.txt"
@@ -119,17 +121,19 @@ class TestProcessSingleDsno:
         result = self._process(100, dsno_path, "cust.xlsx")
         assert result is None  # None means success
 
+    @patch("dsno_processor.processor._lookup_shipment_from_db", return_value=None)
     @patch("dsno_processor.processor.read_customer_sheet")
     @patch("dsno_processor.processor.get_dsno_info")
-    def test_invoice_not_found(self, mock_info, mock_read, tmp_path):
+    def test_invoice_not_found(self, mock_info, mock_read, mock_db, tmp_path):
         mock_read.return_value = MagicMock()
         mock_info.return_value = None
         result = self._process(999, tmp_path / "x.txt", "cust.xlsx")
         assert "not found" in result.lower()
 
+    @patch("dsno_processor.processor._lookup_shipment_from_db", return_value=None)
     @patch("dsno_processor.processor.read_customer_sheet")
     @patch("dsno_processor.processor.get_dsno_info")
-    def test_missing_booking(self, mock_info, mock_read, tmp_path):
+    def test_missing_booking(self, mock_info, mock_read, mock_db, tmp_path):
         mock_read.return_value = MagicMock()
         mock_info.return_value = MagicMock(
             invoice="100", container="CNT", booking="nan"
@@ -137,13 +141,14 @@ class TestProcessSingleDsno:
         result = self._process(100, tmp_path / "x.txt", "cust.xlsx")
         assert "booking" in result.lower()
 
+    @patch("dsno_processor.processor._lookup_shipment_from_db", return_value=None)
     @patch("dsno_processor.processor.get_size")
     @patch("dsno_processor.processor.normalize_file")
     @patch("dsno_processor.processor.edit_navstar_dsno")
     @patch("dsno_processor.processor.get_dsno_info")
     @patch("dsno_processor.processor.read_customer_sheet")
     def test_file_not_found(
-        self, mock_read, mock_info, mock_edit, mock_normalize, mock_size
+        self, mock_read, mock_info, mock_edit, mock_normalize, mock_size, mock_db
     ):
         mock_read.return_value = MagicMock()
         mock_info.return_value = MagicMock(
@@ -152,6 +157,7 @@ class TestProcessSingleDsno:
         result = self._process(100, Path("/nonexistent/DSNO.txt"), "cust.xlsx")
         assert "not found" in result.lower()
 
+    @patch("dsno_processor.processor._lookup_shipment_from_db", return_value=None)
     @patch("dsno_processor.processor.get_size")
     @patch("dsno_processor.processor.normalize_file")
     @patch("dsno_processor.processor.edit_navstar_dsno")
@@ -164,6 +170,7 @@ class TestProcessSingleDsno:
         mock_edit,
         mock_normalize,
         mock_size,
+        mock_db,
         tmp_path: Path,
     ):
         dsno = tmp_path / "DSNO.txt"
@@ -176,6 +183,26 @@ class TestProcessSingleDsno:
 
         result = self._process(100, dsno, "cust.xlsx")
         assert "unchanged" in result.lower()
+
+    @patch("dsno_processor.processor.get_size")
+    @patch("dsno_processor.processor.normalize_file")
+    @patch("dsno_processor.processor.edit_navstar_dsno")
+    @patch("dsno_processor.processor._lookup_shipment_from_db")
+    def test_db_lookup_skips_spreadsheet(
+        self, mock_db, mock_edit, mock_normalize, mock_size, tmp_path: Path
+    ):
+        """When the DB returns data, the spreadsheet is never read."""
+        from dsno_processor.models import DsnoInfo
+
+        dsno = tmp_path / "DSNO.txt"
+        dsno.write_text("content", encoding="utf-8")
+
+        mock_db.return_value = DsnoInfo(invoice="100", container="CNT", booking="BK")
+        mock_size.side_effect = [10, 20]
+
+        result = self._process(100, dsno, "cust.xlsx")
+        assert result is None
+        mock_db.assert_called_once_with(100)
 
 
 # ── process_dsno (public API) ────────────────────────────────────────

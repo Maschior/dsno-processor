@@ -93,7 +93,7 @@ def get_invoice_dsno_pairs(
 
     date_col = cfg.DATE_COL.upper()
     dsno_col = cfg.DSNO_COL.upper()
-    invoice_col = cfg.INVOICE_COL.upper()
+    invoice_col = cfg.CONTROL_INVOICE_COL.upper()
     status_col = cfg.STATUS_COL.upper()
     oracle_col = cfg.FREIGHT_ORACLE_COL.upper()
     softway_col = cfg.FREIGHT_SOFTWAY_COL.upper()

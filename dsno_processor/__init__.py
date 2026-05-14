@@ -2,6 +2,15 @@
 
 __version__ = "1.2.1"
 
+from .database import (
+    ControlRecord,
+    ShipmentRecord,
+    get_connection,
+    get_db_path,
+    init_db,
+    import_customer_sheet,
+    import_control_sheet,
+)
 from .ebs_download import DownloadConfig, run_download
 from .ebs_upload import UploadConfig, run_upload
 from .models import DateRange, DsnoInfo, FreightMode, ProcessingResult
@@ -17,5 +26,10 @@ __all__ = [
     "run_download",
     "UploadConfig",
     "run_upload",
+    "ControlRecord",
+    "ShipmentRecord",
+    "get_connection",
+    "get_db_path",
+    "init_db",
+    "import_customer_sheet",
 ]
-

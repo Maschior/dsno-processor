@@ -9,6 +9,7 @@ from pathlib import Path
 from .control_reader import get_invoice_dsno_pairs, read_control_sheet
 from .customer_reader import get_dsno_info, read_customer_sheet
 from .config import load_config
+from .database import get_connection, get_db_path, get_shipment_info, init_db, update_statuses_for_processed
 from .editor import edit_navstar_dsno, move_to_processed, normalize_file, get_size
 from .exceptions import CanceledError, ColumnMissingError, DsnoProcessorError, SheetNotFoundError
 from .models import DateRange, DsnoInfo, FreightMode, ProcessingResult
@@ -100,6 +101,31 @@ def _resolve_freight(
 # ── Single DSNO processing ──────────────────────────────────────────
 
 
+def _lookup_shipment_from_db(invoice: int) -> DsnoInfo | None:
+    """Try to find shipment info in the local SQLite database.
+
+    Returns a :class:`DsnoInfo` if found, otherwise ``None``.
+    This never raises — any database error is silently logged.
+    """
+    try:
+        db_path = get_db_path()
+        if not db_path.exists():
+            return None
+        conn = get_connection(db_path)
+        record = get_shipment_info(conn, invoice)
+        conn.close()
+        if record is None:
+            return None
+        return DsnoInfo(
+            invoice=str(record.invoice),
+            container=record.container,
+            booking=record.booking,
+        )
+    except Exception as exc:
+        log.debug("DB lookup failed for invoice %s: %s", invoice, exc)
+        return None
+
+
 def _process_single_dsno(
     invoice: int,
     dsno_path: Path,
@@ -108,10 +134,19 @@ def _process_single_dsno(
     """Process one DSNO file. Returns an error message on failure, else ``None``."""
     try:
         cfg = load_config()
-        customer_sheet_df = read_customer_sheet(customer_sheet_path)
-        info = get_dsno_info(invoice, customer_sheet_df)
 
-        if info is None:
+        # Respect data_source setting
+        if getattr(cfg.general, "data_source", "spreadsheet") == "database":
+            info = _lookup_shipment_from_db(invoice)
+            if info is not None:
+                log.info("Invoice %s found in database.", invoice)
+            else:
+                return f"Invoice {invoice} not found in database."
+        else:
+            customer_sheet_df = read_customer_sheet(customer_sheet_path)
+            info = get_dsno_info(invoice, customer_sheet_df)
+
+        if not info:
             return f"Invoice {invoice} not found in customer sheet."
 
         # Resolve missing container → default to AIR FREIGHT
@@ -224,13 +259,19 @@ def process_dsno(
         raise CanceledError("Cancelled by user")
 
     try:
-        control_sheet_df = read_control_sheet(control_sheet)
+        cfg = load_config()
+        if getattr(cfg.general, "data_source", "spreadsheet") == "database":
+            from .database import get_db_path, get_connection, get_control_pairs
+            conn = get_connection(get_db_path())
+            pairs = get_control_pairs(conn, parsed_range.start, parsed_range.end, status_filter=status_filter)
+            conn.close()
+        else:
+            control_sheet_df = read_control_sheet(control_sheet)
+            pairs = get_invoice_dsno_pairs(parsed_range, control_sheet_df, status_filter=status_filter)
     except Exception as exc:
-        log.error("Failed to read control sheet: %s", exc)
-        _cb("error", {"name": "System", "detail": f"Failed to read control sheet: {exc}"})
+        log.error("Failed to read control data: %s", exc)
+        _cb("error", {"name": "System", "detail": f"Failed to read control data: {exc}"})
         return result
-
-    pairs = get_invoice_dsno_pairs(parsed_range, control_sheet_df, status_filter=status_filter)
 
     if not pairs:
         log.info("No DSNO files found matching the criteria.")
@@ -282,9 +323,39 @@ def process_dsno(
             move_to_processed(dsno_path, processed_dir)
             _cb("success", {"name": dsno_path.name})
 
-    # Update CONTROL_SHEET status after processing all DSNO files
-    _cb("phase", {"text": "Updating control sheet..."})
-    update_control_sheet_status(control_sheet, processed_dir)
+    # Update status
+    cfg = load_config()
+    if getattr(cfg.general, "data_source", "spreadsheet") == "spreadsheet":
+        _cb("phase", {"text": "Updating control sheet..."})
+        update_control_sheet_status(control_sheet, processed_dir)
+        
+        # Also update database statuses if the DB exists (legacy fallback behavior)
+        try:
+            db_path = get_db_path()
+            if db_path.exists() and processed_dir.exists():
+                processed_files = {f.name for f in processed_dir.iterdir() if f.is_file()}
+                if processed_files:
+                    conn = get_connection(db_path)
+                    db_updated = update_statuses_for_processed(conn, processed_files)
+                    conn.close()
+                    if db_updated:
+                        log.info("Updated %d status(es) in database.", db_updated)
+        except Exception as exc:
+            log.warning("Could not update database statuses: %s", exc)
+    else:
+        _cb("phase", {"text": "Updating database..."})
+        try:
+            db_path = get_db_path()
+            if db_path.exists() and processed_dir.exists():
+                processed_files = {f.name for f in processed_dir.iterdir() if f.is_file()}
+                if processed_files:
+                    conn = get_connection(db_path)
+                    db_updated = update_statuses_for_processed(conn, processed_files)
+                    conn.close()
+                    if db_updated:
+                        log.info("Updated %d status(es) in database.", db_updated)
+        except Exception as exc:
+            log.warning("Could not update database statuses: %s", exc)
 
     log.info(
         "Processing complete: %d/%d successful, %d errors.",

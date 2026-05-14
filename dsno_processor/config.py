@@ -29,6 +29,7 @@ class GeneralConfig:
     """General application preferences."""
 
     language: str = "en"
+    data_source: str = "spreadsheet"
 
 @dataclass
 class PathsConfig:
@@ -150,6 +151,14 @@ class AppConfig:
     @language.setter
     def language(self, value: str) -> None:
         self.general.language = value
+
+    @property
+    def data_source(self) -> str:
+        return self.general.data_source
+
+    @data_source.setter
+    def data_source(self, value: str) -> None:
+        self.general.data_source = value
 
     @property
     def dsno_directory(self) -> Path:
@@ -283,6 +292,7 @@ def _config_to_dict(config: AppConfig) -> dict:
     return {
         "general": {
             "language": config.general.language,
+            "data_source": config.general.data_source,
         },
         "paths": {
             "dsno_directory": str(config.paths.dsno_directory),
@@ -349,6 +359,7 @@ def _dict_to_config(data: dict) -> AppConfig:
     return AppConfig(
         general=GeneralConfig(
             language=gen_d.get("language", "en"),
+            data_source=gen_d.get("data_source", "spreadsheet"),
         ),
         paths=PathsConfig(
             dsno_directory=Path(paths_d.get("dsno_directory", "")),
@@ -430,6 +441,7 @@ def _migrate_ini_to_toml(
     config = AppConfig(
         general=GeneralConfig(
             language=general_sec.get("LANGUAGE", "en"),
+            data_source="spreadsheet",
         ),
         paths=PathsConfig(
             dsno_directory=Path(paths_sec.get("DSNO_DIRECTORY", "")),
