@@ -61,13 +61,13 @@ class TestResolveFreight:
 
     def test_both_empty(self):
         value, error = self._resolve(None, None, FreightMode.AIR)
-        assert value is None
-        assert error is not None
+        assert value == "AIR"
+        assert error is None
 
     def test_both_nan_strings(self):
         value, error = self._resolve("nan", "nan", FreightMode.SEA)
-        assert value is None
-        assert error is not None
+        assert value == "SEA"
+        assert error is None
 
     # -- ROAD mode (unhandled → fallback) --
 

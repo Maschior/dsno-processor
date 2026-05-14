@@ -74,9 +74,9 @@ def _resolve_freight(
         oracle = "MARITIMA"
 
     if not oracle and not softway:
-        error = 'No freight information available.'
-        log.error(error)
-        return None, error
+        error = f"No freight information available. Defaulting to mode {mode.value}."
+        log.warning(error)
+        return mode.value, None
 
     if mode == FreightMode.AIR:
         if not softway and oracle:

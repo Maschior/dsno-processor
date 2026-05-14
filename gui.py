@@ -2051,20 +2051,10 @@ class DSNOApp(ctk.CTk):
         """Reset the dashboard and filters of the currently selected tab."""
         current_tab = self._tabview.get()
         if current_tab == self._TAB_PROC:
-            # Reset filters
-            self.start_date.reset()
-            self.end_date.reset()
-            self.filter_by_status.reset()
-            
             # Reset dashboard
             self.dashboard.reset_to_idle()
             self._update_run_btn_state()
         elif current_tab == self._TAB_DOWNLOAD:
-            # Reset filters
-            self.dl_date_start.reset()
-            self.dl_date_end.reset()
-            self.dl_status_filter_var.set("")
-            
             # Reset dashboard
             self.dl_dashboard.reset_to_idle()
         elif current_tab == self._TAB_UPLOAD:
