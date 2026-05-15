@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .control_reader import get_invoice_dsno_pairs, read_control_sheet
 from .customer_reader import get_dsno_info, read_customer_sheet
-from .config import load_config
+from .config import AppConfig, load_config
 from .database import get_connection, get_db_path, get_shipment_info, init_db, update_statuses_for_processed
 from .editor import edit_navstar_dsno, move_to_processed, normalize_file, get_size
 from .exceptions import CanceledError, ColumnMissingError, DsnoProcessorError, SheetNotFoundError
@@ -16,6 +16,14 @@ from .models import DateRange, DsnoInfo, FreightMode, ProcessingResult
 from .status_updater import update_control_sheet_status
 
 log = logging.getLogger(__name__)
+
+
+def _safe_config() -> AppConfig:
+    """Return persisted config when available, otherwise safe defaults."""
+    try:
+        return load_config()
+    except Exception:
+        return AppConfig()
 
 
 # ── Logging setup ────────────────────────────────────────────────────
@@ -133,15 +141,13 @@ def _process_single_dsno(
 ) -> str | None:
     """Process one DSNO file. Returns an error message on failure, else ``None``."""
     try:
-        cfg = load_config()
+        cfg = _safe_config()
 
-        # Respect data_source setting
-        if getattr(cfg.general, "data_source", "spreadsheet") == "database":
-            info = _lookup_shipment_from_db(invoice)
-            if info is not None:
-                log.info("Invoice %s found in database.", invoice)
-            else:
-                return f"Invoice {invoice} not found in database."
+        info = _lookup_shipment_from_db(invoice)
+        if info is not None:
+            log.info("Invoice %s found in database.", invoice)
+        elif getattr(cfg.general, "data_source", "spreadsheet") == "database":
+            return f"Invoice {invoice} not found in database."
         else:
             customer_sheet_df = read_customer_sheet(customer_sheet_path)
             info = get_dsno_info(invoice, customer_sheet_df)
@@ -259,7 +265,7 @@ def process_dsno(
         raise CanceledError("Cancelled by user")
 
     try:
-        cfg = load_config()
+        cfg = _safe_config()
         if getattr(cfg.general, "data_source", "spreadsheet") == "database":
             from .database import get_db_path, get_connection, get_control_pairs
             conn = get_connection(get_db_path())
@@ -324,7 +330,7 @@ def process_dsno(
             _cb("success", {"name": dsno_path.name})
 
     # Update status
-    cfg = load_config()
+    cfg = _safe_config()
     if getattr(cfg.general, "data_source", "spreadsheet") == "spreadsheet":
         _cb("phase", {"text": "Updating control sheet..."})
         update_control_sheet_status(control_sheet, processed_dir)

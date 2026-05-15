@@ -14,11 +14,36 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import load_config
+from .config import AppConfig, load_config
 from .exceptions import ColumnMissingError, SheetNotFoundError
 from .models import DateRange
 
 log = logging.getLogger(__name__)
+
+
+def _safe_config() -> AppConfig:
+    """Return persisted config when available, otherwise default column names."""
+    try:
+        return load_config()
+    except Exception:
+        return AppConfig()
+
+
+_cfg = _safe_config()
+_DATE_COL = _cfg.DATE_COL.upper()
+_DSNO_COL = _cfg.DSNO_COL.upper()
+_INVOICE_COL = _cfg.CONTROL_INVOICE_COL.upper()
+_STATUS_COL = _cfg.STATUS_COL.upper()
+_FREIGHT_ORACLE_COL = _cfg.FREIGHT_ORACLE_COL.upper()
+_FREIGHT_SOFTWAY_COL = _cfg.FREIGHT_SOFTWAY_COL.upper()
+_REQUIRED_COLUMNS = {
+    _DATE_COL,
+    _DSNO_COL,
+    _INVOICE_COL,
+    _STATUS_COL,
+    _FREIGHT_ORACLE_COL,
+    _FREIGHT_SOFTWAY_COL,
+}
 
 
 # ── Sheet loading ────────────────────────────────────────────────────
@@ -57,9 +82,7 @@ def get_status_options(control_sheet: pd.DataFrame) -> list[str]:
     """
     try:
 
-        cfg = load_config()
-        status_col = cfg.STATUS_COL.upper()
-        values = sorted(control_sheet[status_col].dropna().unique().tolist())
+        values = sorted(control_sheet[_STATUS_COL].dropna().unique().tolist())
         return values if len(values) > 1 else []
     except Exception as exc:
         log.warning("Could not read status options from sheet: %s", exc)
@@ -89,23 +112,14 @@ def get_invoice_dsno_pairs(
         ColumnMissingError: If required columns are absent from the sheet.
     """
     df = control_sheet
-    cfg = load_config()
+    date_col = _DATE_COL
+    dsno_col = _DSNO_COL
+    invoice_col = _INVOICE_COL
+    status_col = _STATUS_COL
+    oracle_col = _FREIGHT_ORACLE_COL
+    softway_col = _FREIGHT_SOFTWAY_COL
 
-    date_col = cfg.DATE_COL.upper()
-    dsno_col = cfg.DSNO_COL.upper()
-    invoice_col = cfg.CONTROL_INVOICE_COL.upper()
-    status_col = cfg.STATUS_COL.upper()
-    oracle_col = cfg.FREIGHT_ORACLE_COL.upper()
-    softway_col = cfg.FREIGHT_SOFTWAY_COL.upper()
-
-    required = {
-        date_col,
-        dsno_col,
-        invoice_col,
-        status_col,
-        oracle_col,
-        softway_col,
-    }
+    required = _REQUIRED_COLUMNS
 
     missing = required - set(df.columns)
     if missing:

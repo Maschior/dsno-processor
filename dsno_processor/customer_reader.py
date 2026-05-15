@@ -14,11 +14,26 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import load_config
+from .config import AppConfig, load_config
 from .exceptions import ColumnMissingError, SheetNotFoundError
 from .models import DsnoInfo
 
 log = logging.getLogger(__name__)
+
+
+def _safe_config() -> AppConfig:
+    """Return persisted config when available, otherwise default column names."""
+    try:
+        return load_config()
+    except Exception:
+        return AppConfig()
+
+
+cfg = _safe_config()
+_INVOICE_COL = cfg.INVOICE_COL.upper()
+_CONTAINER_COL = cfg.CONTAINER_COL.upper()
+_BOOKING_COL = cfg.BOOKING_COL.upper()
+_REQUIRED_COLUMNS = {_INVOICE_COL, _BOOKING_COL}
 
 # region agent log helpers (debug-1ca7c5)
 _DEBUG_LOG_PATH = "debug-1ca7c5.log"
@@ -93,9 +108,8 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
     if not path.exists():
         raise SheetNotFoundError(f"Customer sheet not found: {path}")
 
-    cfg = load_config()
     sheet_name = cfg.CUSTOMER_SHEET_NAME
-    required = {cfg.INVOICE_COL.upper(), cfg.BOOKING_COL.upper()}
+    required = _REQUIRED_COLUMNS
 
     # Excel files often have a blank "cover" as the first sheet.
     # If sheet_name isn't configured, scan sheets and pick the first
@@ -210,12 +224,10 @@ def get_dsno_info(invoice: int, customer_sheet: pd.DataFrame) -> DsnoInfo | None
         ColumnMissingError: If required columns are absent from the sheet.
     """
     df = customer_sheet
-    cfg = load_config()
-
-    invoice_col = cfg.INVOICE_COL.upper()
-    booking_col = cfg.BOOKING_COL.upper()
-    container_col = cfg.CONTAINER_COL.upper()
-    required = {invoice_col, booking_col}
+    invoice_col = _INVOICE_COL
+    booking_col = _BOOKING_COL
+    container_col = _CONTAINER_COL
+    required = _REQUIRED_COLUMNS
 
     missing = required - set(df.columns)
     if missing:
