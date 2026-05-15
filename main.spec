@@ -47,6 +47,7 @@ a = Analysis(
         'PIL.Image',
         'PIL.ImageFilter',
         'PIL.ImageTk',
+        'sqlite3',
         # ── Config (TOML) ────────────────────────────────
         'tomllib',
         'tomli_w',

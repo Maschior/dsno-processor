@@ -4,11 +4,11 @@ import sys
 from pathlib import Path
 
 # Adiciona o diretório raiz ao path para importar a versão
-sys.path.append(str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
     from dsno_processor import __version__
 except ImportError:
-    __version__ = "1.2.1"
+    __version__ = "2.0.0"
 
 def run_command(command, shell=True):
     print(f"Executando: {command}")
@@ -28,10 +28,10 @@ def main():
 
     # 2. Inno Setup (ISCC)
     # Tenta localizar o ISCC.exe se não estiver no PATH
-    iscc_path = "iscc" 
+    iscc_path = r"C:\Users\ao32v\AppData\Local\Programs\Inno Setup 6\ISCC.exe" 
     
     print("Gerando instalador...")
-    run_command(f'{iscc_path} /dMyAppVersion={__version__} installer_setup.iss')
+    run_command(f'"{iscc_path}" /dMyAppVersion={__version__} installer_setup.iss')
 
     print(f"\nSucesso! O instalador foi gerado na pasta 'Output/'.")
 

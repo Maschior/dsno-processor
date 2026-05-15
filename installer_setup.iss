@@ -1,7 +1,7 @@
 ; Script gerado para o Inno Setup
 ; Configurado para instalação local (Current User) - NÃO requer privilégios de Administrador.
 
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "2.0.0"
 
 [Setup]
 ; Informações Básicas
