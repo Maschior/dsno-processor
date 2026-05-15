@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import tkinter as tk
 from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
+from PIL import Image
+
+from core.assets import get_asset_path
 
 from dsno_processor.config import (
     AppConfig,

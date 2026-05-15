@@ -7,6 +7,12 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
+from dsno_processor.database import (
+    get_connection,
+    get_db_path,
+    import_customer_sheet as db_import_customer_sheet,
+    init_db,
+)
 from dsno_processor.i18n import t
 from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
 

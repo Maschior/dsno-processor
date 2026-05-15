@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import tkinter as tk
 
 import customtkinter as ctk
 from PIL import Image
