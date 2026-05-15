@@ -32,4 +32,5 @@ __all__ = [
     "get_db_path",
     "init_db",
     "import_customer_sheet",
+    "import_control_sheet",
 ]

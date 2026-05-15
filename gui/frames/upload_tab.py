@@ -3,28 +3,12 @@
 from __future__ import annotations
 
 import logging
-import os
-import threading
-from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
-from PIL import Image
 
-from core.assets import get_asset_path
-from dsno_processor import process_dsno
-from dsno_processor.config import load_config, save_config
-from dsno_processor.control_reader import get_status_options, read_control_sheet
-from dsno_processor.ebs_download import DownloadConfig, run_download
-from dsno_processor.ebs_upload import UploadConfig, run_upload
-from dsno_processor.exceptions import CanceledError, ConfigurationError, LoginError
 from dsno_processor.i18n import t
-from gui.dialogs.import_wizards import ImportControlWizard, ImportWizard
-from gui.dialogs.language_menu import LanguageMenu
-from gui.dialogs.settings_window import SettingsWindow
 from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
 from gui.widgets.dashboard import ProgressDashboard
-from gui.widgets.dropdowns import MultiSelectDropdown
-from gui.widgets.inputs import DateInput, DateTimeInput, FilePickerRow
 
 log = logging.getLogger(__name__)
 
@@ -67,17 +51,20 @@ class UploadTabMixin:
             def __init__(self, e):
                 self.e = e
                 self.cb = []
-            def get(self): return self.e.get()
+            def get(self):
+                return self.e.get()
             def set(self, val):
                 self.e.delete(0, "end")
                 self.e.insert(0, val)
-                for c in self.cb: c()
+                for c in self.cb:
+                    c()
             def trace_add(self, mode, callback):
                 self.cb.append(callback)
 
         def _ent(r, default="", placeholder=""):
             e = ctk.CTkEntry(form, font=ctk.CTkFont(family=_FONT_FAMILY, size=12), placeholder_text=placeholder)
-            if default: e.insert(0, default)
+            if default:
+                e.insert(0, default)
             e.grid(row=r, column=1, sticky="ew", pady=5, padx=(0, 6))
             var = _WrapperVar(e)
             e.bind("<KeyRelease>", lambda evt: [c() for c in var.cb])
@@ -91,7 +78,8 @@ class UploadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
         row += 1
         _lbl(t("dl.ebs_url"), row)
-        self.ul_url_var = _ent(row, cfg.ebs_upload_url if cfg else ""); row += 1
+        self.ul_url_var = _ent(row, cfg.ebs_upload_url if cfg else "")
+        row += 1
 
         # Files
         ctk.CTkLabel(form, text=t("dl.section_files"), anchor="w",
@@ -104,7 +92,8 @@ class UploadTabMixin:
         ctk.CTkButton(form, text=t("btn.browse"), width=70,
             command=self._browse_ul_dir,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-        ).grid(row=row, column=2, padx=(4, 6), pady=5); row += 1
+        ).grid(row=row, column=2, padx=(4, 6), pady=5)
+        row += 1
 
         # Folders
         ctk.CTkLabel(form, text=t("dl.section_folders"), anchor="w",
@@ -113,7 +102,8 @@ class UploadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("ul.folder_index"), row)
-        self.ul_folder_var = _ent(row, str(cfg.ebs_upload_folder_index) if cfg else "92"); row += 1
+        self.ul_folder_var = _ent(row, str(cfg.ebs_upload_folder_index) if cfg else "92")
+        row += 1
 
         # Start button
         self.ul_start_btn = ctk.CTkButton(

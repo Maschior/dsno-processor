@@ -13,7 +13,6 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -321,7 +320,8 @@ def perform_upload(
                 input_file.send_keys(file_path)
                 break
             except StaleElementReferenceException:
-                if attempt == 2: raise
+                if attempt == 2:
+                    raise
                 _stoppable_sleep(1, cancel_event)
                 continue
         
@@ -336,7 +336,8 @@ def perform_upload(
                 button.click()
                 break
             except StaleElementReferenceException:
-                if attempt == 2: raise
+                if attempt == 2:
+                    raise
                 _stoppable_sleep(1, cancel_event)
                 continue
         
@@ -471,7 +472,7 @@ def run_upload(config: UploadConfig, progress_callback=None, cancel_event=None) 
         _cb("finished", {})
         try:
             driver.quit()
-        except:
-            pass
+        except Exception:
+            logger.debug("Unable to close browser driver cleanly", exc_info=True)
 
     return {"success": success_count, "skipped": skipped_count, "failures": failure_list}

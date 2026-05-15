@@ -3,37 +3,28 @@
 from __future__ import annotations
 
 import logging
-import os
 import threading
-from tkinter import filedialog, messagebox
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 import customtkinter as ctk
 from PIL import Image
 
 from core.assets import get_asset_path
-from dsno_processor import process_dsno
-from dsno_processor.config import load_config, save_config
-from dsno_processor.control_reader import get_status_options, read_control_sheet
-from dsno_processor.ebs_download import DownloadConfig, run_download
-from dsno_processor.ebs_upload import UploadConfig, run_upload
-from dsno_processor.exceptions import CanceledError, ConfigurationError, LoginError
+from dsno_processor.config import load_config
+from dsno_processor.exceptions import ConfigurationError
 from dsno_processor.i18n import set_language, t
-from gui.dialogs.import_wizards import ImportControlWizard, ImportWizard
-from gui.dialogs.language_menu import LanguageMenu
-from gui.dialogs.settings_window import SettingsWindow
-from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
-from gui.widgets.dashboard import (
-    BlockingOverlay,
-    LogWindow,
-    ProgressDashboard,
-    _DashboardLogHandler,
-)
-from gui.widgets.dropdowns import MultiSelectDropdown
-from gui.widgets.inputs import DateInput, DateTimeInput, FilePickerRow
 from gui.controllers.app_actions import AppActionsMixin
 from gui.frames.download_tab import DownloadTabMixin
 from gui.frames.processor_tab import ProcessorTabMixin
 from gui.frames.upload_tab import UploadTabMixin
+from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
+from gui.widgets.dashboard import (
+    BlockingOverlay,
+    LogWindow,
+    _DashboardLogHandler,
+)
 
 log = logging.getLogger(__name__)
 
@@ -44,15 +35,8 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
     def __init__(self) -> None:
         super().__init__()
 
-        # Tenta carregar o ícone
-        try:
-            icon_path = get_asset_path("assets/icons/favicon.ico")
-            if os.path.exists(icon_path):
-                self.iconbitmap(icon_path)
-            else:
-                logging.error(f"Ícone não encontrado em: {icon_path}")
-        except Exception as e:
-            logging.error(f"Erro ao carregar ícone: {e}")
+        self._main_thread = threading.current_thread()
+        self._load_window_icon()
 
         # ── Load config ──────────────────────────────────────────
         try:
@@ -71,10 +55,10 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         self.title(t("app.title"))
         
         # Center the window on the screen
-        appResolution = "1270x720"
-        x = (self.winfo_screenwidth() // 2) - (int(appResolution.split("x")[0]) // 2)
-        y = (self.winfo_screenheight() // 2) - (int(appResolution.split("x")[1]) // 2)
-        self.geometry(f"{appResolution}+{x}+{y}")
+        width, height = 1270, 720
+        x = (self.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.winfo_screenheight() // 2) - (height // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
         
         self.minsize(640, 480)
 
@@ -100,6 +84,25 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         self._setup_logging()
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
+    def _load_window_icon(self) -> None:
+        """Load the application icon without failing startup if the asset is missing."""
+        icon_path = Path(get_asset_path("assets/icons/favicon.ico"))
+        try:
+            if icon_path.exists():
+                self.iconbitmap(str(icon_path))
+            else:
+                log.warning("Application icon not found at %s", icon_path)
+        except Exception:
+            log.exception("Failed to load application icon from %s", icon_path)
+
+    def _run_on_ui_thread(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+        """Schedule UI work safely from worker threads."""
+        if threading.current_thread() is self._main_thread:
+            func(*args, **kwargs)
+            return
+
+        self.after(0, lambda: func(*args, **kwargs))
+
     def _on_closing(self) -> None:
         """Handle window close event to ensure background threads can clean up."""
         for ev_attr in ["_processor_cancel_event", "_dl_cancel_event", "_ul_cancel_event"]:
@@ -115,7 +118,8 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
 
     def _setup_logging(self) -> None:
         root_logger = logging.getLogger()
-        root_logger.addHandler(self.log_handler)
+        if self.log_handler not in root_logger.handlers:
+            root_logger.addHandler(self.log_handler)
         root_logger.setLevel(logging.INFO)
         
     def _show_log_window(self) -> None:

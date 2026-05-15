@@ -1,7 +1,7 @@
-import xml.etree.ElementTree as ET
 from PySide6.QtGui import QImage, QPainter
 from PySide6.QtSvg import QSvgRenderer
-import tempfile, os
+import tempfile
+import os
 
 def conv(in_svg, out_png, fill_color):
     with open(in_svg, 'r', encoding='utf-8') as f:

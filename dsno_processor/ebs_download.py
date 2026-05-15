@@ -13,7 +13,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 import openpyxl
 import requests
@@ -488,7 +487,8 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
                 if field.get_attribute("value") == filename:
                     break
             except StaleElementReferenceException:
-                if attempt == 2: raise
+                if attempt == 2:
+                    raise
                 _stoppable_sleep(1, cancel_event)
                 continue
         
@@ -503,7 +503,8 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
                 field.send_keys(Keys.TAB)
                 break
             except StaleElementReferenceException:
-                if attempt == 2: raise
+                if attempt == 2:
+                    raise
                 _stoppable_sleep(1, cancel_event)
                 continue
                 
@@ -525,7 +526,8 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
                     logger.info("EBS Popup/Dialog detected — file not found in this folder.")
                     try:
                         driver.execute_script("document.getElementById('closeAnchorlovPopUp_FileName')?.click();")
-                    except: pass
+                    except Exception:
+                        logger.debug("Unable to close EBS popup", exc_info=True)
                     return False
             except Exception as e:
                 # If element becomes stale during checking, it likely means the page 
@@ -722,7 +724,7 @@ def run_download(config: DownloadConfig, progress_callback=None, cancel_event=No
         _cb("finished", {})
         try:
             driver.quit()
-        except:
-            pass
+        except Exception:
+            logger.debug("Unable to close browser driver cleanly", exc_info=True)
 
     return {"success": success_count, "skipped": skipped_count, "failures": failure_list}

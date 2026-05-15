@@ -5,15 +5,12 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from collections.abc import Callable
 from tkinter import filedialog, messagebox
+from typing import Any
 
-import customtkinter as ctk
-from PIL import Image
-
-from core.assets import get_asset_path
 from dsno_processor import process_dsno
 from dsno_processor.config import load_config, save_config
-from dsno_processor.control_reader import get_status_options, read_control_sheet
 from dsno_processor.ebs_download import DownloadConfig, run_download
 from dsno_processor.ebs_upload import UploadConfig, run_upload
 from dsno_processor.exceptions import CanceledError, ConfigurationError, LoginError
@@ -21,16 +18,84 @@ from dsno_processor.i18n import t
 from gui.dialogs.import_wizards import ImportControlWizard, ImportWizard
 from gui.dialogs.language_menu import LanguageMenu
 from gui.dialogs.settings_window import SettingsWindow
-from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
-from gui.widgets.dashboard import ProgressDashboard
-from gui.widgets.dropdowns import MultiSelectDropdown
-from gui.widgets.inputs import DateInput, DateTimeInput, FilePickerRow
 
 log = logging.getLogger(__name__)
 
 
 class AppActionsMixin:
     """GUI action handlers that coordinate services and dialogs."""
+
+    def _run_background(
+        self,
+        *,
+        name: str,
+        target: Callable[..., None],
+        args: tuple[Any, ...] = (),
+    ) -> None:
+        """Start a named daemon worker thread for a long-running task."""
+        thread = threading.Thread(target=target, args=args, name=name, daemon=True)
+        thread.start()
+
+    def _make_dashboard_progress_callback(self, dashboard):
+        """Route backend progress events to a dashboard on the Tk main thread."""
+
+        def apply_event(event: str, data: dict[str, Any]) -> None:
+            if event == "phase":
+                dashboard.set_phase(data["text"])
+            elif event == "total":
+                dashboard.reset(data["count"])
+            elif event == "success":
+                dashboard.mark_success(data["name"], data.get("detail", ""))
+            elif event == "error":
+                dashboard.mark_error(data["name"], data["detail"])
+            elif event == "skipped":
+                dashboard.mark_skipped(data["name"], data.get("detail", ""))
+            elif event == "cancelled":
+                dashboard._cancelled = True
+            elif event == "finished":
+                dashboard.finish()
+
+        def callback(event: str, data: dict[str, Any]) -> None:
+            self._run_on_ui_thread(apply_event, event, data)
+
+        return callback
+
+    def _show_info_async(self, title: str, message: str) -> None:
+        """Show an info dialog from the Tk main thread."""
+        self._run_on_ui_thread(messagebox.showinfo, title, message)
+
+    def _show_error_async(self, title: str, message: str) -> None:
+        """Show an error dialog from the Tk main thread."""
+        self._run_on_ui_thread(messagebox.showerror, title, message)
+
+    def _mark_dashboard_cancelled(self, dashboard, message: str) -> None:
+        """Set a dashboard to the cancelled final state."""
+        dashboard.set_phase(message)
+        dashboard._cancelled = True
+        dashboard.finish()
+
+    def _finish_dashboard_with_error(self, dashboard, message: str) -> None:
+        """Set a dashboard to an error final state."""
+        dashboard.set_phase(message)
+        dashboard.finish()
+
+    def _finish_processing_ui(self) -> None:
+        """Restore processor controls after worker completion."""
+        self._hide_blocking_overlay()
+        self._update_run_btn_state()
+        self.dashboard.cancel_btn.configure(state="disabled")
+
+    def _finish_download_ui(self) -> None:
+        """Restore download controls after worker completion."""
+        self._hide_blocking_overlay()
+        self._update_dl_run_btn_state()
+        self.dl_dashboard.cancel_btn.configure(state="disabled")
+
+    def _finish_upload_ui(self) -> None:
+        """Restore upload controls after worker completion."""
+        self._hide_blocking_overlay()
+        self._update_ul_run_btn_state()
+        self.ul_dashboard.cancel_btn.configure(state="disabled")
 
     def _browse_customer(self) -> None:
         initial = (
@@ -101,39 +166,38 @@ class AppActionsMixin:
         self.dashboard.cancel_btn.configure(state="normal")
         self._processor_cancel_event = threading.Event()
         self._clear_log()
-        thread = threading.Thread(target=self._process_thread, daemon=True)
-        thread.start()
 
-    def _make_progress_callback(self):
-        """Create a callback that routes backend events to the processor dashboard."""
-        def callback(event, data):
-            if event == "phase":
-                self.dashboard.set_phase(data["text"])
-            elif event == "total":
-                self.dashboard.reset(data["count"])
-            elif event == "success":
-                self.dashboard.mark_success(data["name"], data.get("detail", ""))
-            elif event == "error":
-                self.dashboard.mark_error(data["name"], data["detail"])
-            elif event == "skipped":
-                self.dashboard.mark_skipped(data["name"], data.get("detail", ""))
-            elif event == "cancelled":
-                self.dashboard._cancelled = True
-            elif event == "finished":
-                self.dashboard.finish()
-        return callback
+        date_range = f"{self.start_date.get()};{self.end_date.get()}"
+        status_filter = self.filter_by_status.get_selected()  # [] means All
+        args = (
+            date_range,
+            self.customer_row.get(),
+            self.control_row.get(),
+            self.dsno_row.get(),
+            self.freight_mode_var.get(),
+            status_filter,
+            self._make_dashboard_progress_callback(self.dashboard),
+        )
+        self._run_background(name="dsno-processor", target=self._process_thread, args=args)
 
-    def _process_thread(self) -> None:
+    def _process_thread(
+        self,
+        date_range: str,
+        customer_sheet: str,
+        control_sheet: str,
+        dsno_dir: str,
+        freight_mode: str,
+        status_filter: list[str],
+        progress_callback: Callable[[str, dict[str, Any]], None],
+    ) -> None:
         try:
-            date_range = f"{self.start_date.get()};{self.end_date.get()}"
-            status_filter = self.filter_by_status.get_selected()  # [] means All
             result = process_dsno(
                 date_range=date_range,
-                customer_sheet=self.customer_row.get(),
-                control_sheet=self.control_row.get(),
-                dsno_dir=self.dsno_row.get(),
-                freight_mode=self.freight_mode_var.get(),
-                progress_callback=self._make_progress_callback(),
+                customer_sheet=customer_sheet,
+                control_sheet=control_sheet,
+                dsno_dir=dsno_dir,
+                freight_mode=freight_mode,
+                progress_callback=progress_callback,
                 cancel_event=getattr(self, "_processor_cancel_event", None),
                 status_filter=status_filter,
             )
@@ -141,31 +205,29 @@ class AppActionsMixin:
             summary = t("msg.processing_complete", success=result.success, total=result.total)
             logging.info(summary)
             if result.failed > 0:
-                messagebox.showinfo(t("msg.complete_title"), t("msg.processing_errors", summary=summary, failed=result.failed))
+                self._show_info_async(
+                    t("msg.complete_title"),
+                    t("msg.processing_errors", summary=summary, failed=result.failed),
+                )
             else:
-                messagebox.showinfo(t("dash.success"), summary)
+                self._show_info_async(t("dash.success"), summary)
         except CanceledError:
             logging.info("Processing was cancelled by the user.")
-            self.dashboard.set_phase(t("msg.cancelled_by_user", default="Cancelled by user"))
-            self.dashboard._cancelled = True
-            self.dashboard.finish()
+            self._run_on_ui_thread(
+                self._mark_dashboard_cancelled,
+                self.dashboard,
+                t("msg.cancelled_by_user", default="Cancelled by user"),
+            )
         except LoginError as exc:
             logging.error("Login failed: %s", exc)
-            self.dashboard.set_phase(f"Login Error: {exc}")
-            self.dashboard.finish()
-            messagebox.showerror(t("settings.save_error_title"), str(exc))
+            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dashboard, f"Login Error: {exc}")
+            self._show_error_async(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.error("Error during processing: %s", exc)
-            self.dashboard.set_phase(f"Error: {exc}")
-            self.dashboard.finish()
-            messagebox.showerror(t("settings.save_error_title"), str(exc))
+            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dashboard, f"Error: {exc}")
+            self._show_error_async(t("settings.save_error_title"), str(exc))
         finally:
-            self._hide_blocking_overlay()
-            # If finished, we could optionally show the start button again,
-            # but for now we follow the user's "botão sumirá" (it remains hidden while showing final status)
-            # We only ensure it's enabled if we were to show it again.
-            self._update_run_btn_state()
-            self.dashboard.cancel_btn.configure(state="disabled")
+            self._run_on_ui_thread(self._finish_processing_ui)
 
     def _reset_current_dashboard(self) -> None:
         """Reset the dashboard and filters of the currently selected tab."""
@@ -214,16 +276,12 @@ class AppActionsMixin:
             folder_indices=folder_indices,
         )
 
-        def _cb(event, data):
-            if event == "phase":     self.dl_dashboard.set_phase(data["text"])
-            elif event == "total":   self.dl_dashboard.reset(data["count"])
-            elif event == "success": self.dl_dashboard.mark_success(data["name"], data.get("detail", ""))
-            elif event == "error":   self.dl_dashboard.mark_error(data["name"], data["detail"])
-            elif event == "skipped": self.dl_dashboard.mark_skipped(data["name"], data.get("detail", ""))
-            elif event == "cancelled": self.dl_dashboard._cancelled = True
-            elif event == "finished":self.dl_dashboard.finish()
-
-        threading.Thread(target=self._download_thread, args=(config, _cb), daemon=True).start()
+        progress_cb = self._make_dashboard_progress_callback(self.dl_dashboard)
+        self._run_background(
+            name="dsno-ebs-download",
+            target=self._download_thread,
+            args=(config, progress_cb),
+        )
 
     def _download_thread(self, config: DownloadConfig, progress_cb) -> None:
         try:
@@ -231,26 +289,24 @@ class AppActionsMixin:
             total = result["success"] + result["skipped"] + len(result["failures"])
             summary = t("msg.download_complete", success=result['success'], total=total - result['skipped'])
             logging.getLogger("dsno_processor.ebs_download").info(summary)
-            messagebox.showinfo(t("msg.download_title"), summary)
+            self._show_info_async(t("msg.download_title"), summary)
         except CanceledError:
             logging.getLogger("dsno_processor.ebs_download").info("Download was cancelled by the user.")
-            self.dl_dashboard.set_phase(t("msg.cancelled_by_user", default="Cancelled by user"))
-            self.dl_dashboard._cancelled = True
-            self.dl_dashboard.finish()
+            self._run_on_ui_thread(
+                self._mark_dashboard_cancelled,
+                self.dl_dashboard,
+                t("msg.cancelled_by_user", default="Cancelled by user"),
+            )
         except LoginError as exc:
             logging.getLogger("dsno_processor.ebs_download").error("Login failed: %s", exc)
-            self.dl_dashboard.set_phase(f"Login Error: {exc}")
-            self.dl_dashboard.finish()
-            messagebox.showerror(t("settings.save_error_title"), str(exc))
+            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dl_dashboard, f"Login Error: {exc}")
+            self._show_error_async(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_download").error("Error: %s", exc)
-            self.dl_dashboard.set_phase(f"Error: {exc}")
-            self.dl_dashboard.finish()
-            messagebox.showerror(t("settings.save_error_title"), str(exc))
+            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dl_dashboard, f"Error: {exc}")
+            self._show_error_async(t("settings.save_error_title"), str(exc))
         finally:
-            self._hide_blocking_overlay()
-            self._update_dl_run_btn_state()
-            self.dl_dashboard.cancel_btn.configure(state="disabled")
+            self._run_on_ui_thread(self._finish_download_ui)
 
     # ──────────────────────────────────────────────────────────────
     # Processing — EBS Upload tab
@@ -278,16 +334,12 @@ class AppActionsMixin:
             headless=cfg.ebs_headless if cfg else False,
         )
 
-        def _cb(event, data):
-            if event == "phase":     self.ul_dashboard.set_phase(data["text"])
-            elif event == "total":   self.ul_dashboard.reset(data["count"])
-            elif event == "success": self.ul_dashboard.mark_success(data["name"], data.get("detail", ""))
-            elif event == "error":   self.ul_dashboard.mark_error(data["name"], data["detail"])
-            elif event == "skipped": self.ul_dashboard.mark_skipped(data["name"], data.get("detail", ""))
-            elif event == "cancelled": self.ul_dashboard._cancelled = True
-            elif event == "finished":self.ul_dashboard.finish()
-
-        threading.Thread(target=self._upload_thread, args=(config, _cb), daemon=True).start()
+        progress_cb = self._make_dashboard_progress_callback(self.ul_dashboard)
+        self._run_background(
+            name="dsno-ebs-upload",
+            target=self._upload_thread,
+            args=(config, progress_cb),
+        )
 
     def _upload_thread(self, config: UploadConfig, progress_cb) -> None:
         try:
@@ -295,26 +347,24 @@ class AppActionsMixin:
             total = result["success"] + result["skipped"] + len(result["failures"])
             summary = t("msg.upload_complete", success=result['success'], total=total)
             logging.getLogger("dsno_processor.ebs_upload").info(summary)
-            messagebox.showinfo(t("msg.upload_title"), summary)
+            self._show_info_async(t("msg.upload_title"), summary)
         except CanceledError:
             logging.getLogger("dsno_processor.ebs_upload").info("Upload was cancelled by the user.")
-            self.ul_dashboard.set_phase(t("msg.cancelled_by_user", default="Cancelled by user"))
-            self.ul_dashboard._cancelled = True
-            self.ul_dashboard.finish()
+            self._run_on_ui_thread(
+                self._mark_dashboard_cancelled,
+                self.ul_dashboard,
+                t("msg.cancelled_by_user", default="Cancelled by user"),
+            )
         except LoginError as exc:
             logging.getLogger("dsno_processor.ebs_upload").error("Login failed: %s", exc)
-            self.ul_dashboard.set_phase(f"Login Error: {exc}")
-            self.ul_dashboard.finish()
-            messagebox.showerror(t("settings.save_error_title"), str(exc))
+            self._run_on_ui_thread(self._finish_dashboard_with_error, self.ul_dashboard, f"Login Error: {exc}")
+            self._show_error_async(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_upload").error("Error: %s", exc)
-            self.ul_dashboard.set_phase(f"Error: {exc}")
-            self.ul_dashboard.finish()
-            messagebox.showerror(t("settings.save_error_title"), str(exc))
+            self._run_on_ui_thread(self._finish_dashboard_with_error, self.ul_dashboard, f"Error: {exc}")
+            self._show_error_async(t("settings.save_error_title"), str(exc))
         finally:
-            self._hide_blocking_overlay()
-            self._update_ul_run_btn_state()
-            self.ul_dashboard.cancel_btn.configure(state="disabled")
+            self._run_on_ui_thread(self._finish_upload_ui)
 
     # ──────────────────────────────────────────────────────────────
     # Settings

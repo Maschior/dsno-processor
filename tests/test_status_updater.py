@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import openpyxl
-import pytest
 
 from dsno_processor.status_updater import update_control_sheet_status
 

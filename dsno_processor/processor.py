@@ -9,9 +9,9 @@ from pathlib import Path
 from .control_reader import get_invoice_dsno_pairs, read_control_sheet
 from .customer_reader import get_dsno_info, read_customer_sheet
 from .config import AppConfig, load_config
-from .database import get_connection, get_db_path, get_shipment_info, init_db, update_statuses_for_processed
+from .database import get_connection, get_db_path, get_shipment_info, update_statuses_for_processed
 from .editor import edit_navstar_dsno, move_to_processed, normalize_file, get_size
-from .exceptions import CanceledError, ColumnMissingError, DsnoProcessorError, SheetNotFoundError
+from .exceptions import CanceledError, ColumnMissingError, SheetNotFoundError
 from .models import DateRange, DsnoInfo, FreightMode, ProcessingResult
 from .status_updater import update_control_sheet_status
 

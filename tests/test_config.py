@@ -6,7 +6,6 @@ import configparser
 from pathlib import Path
 
 import pytest
-import tomli_w
 
 from dsno_processor.config import (
     AppConfig,
