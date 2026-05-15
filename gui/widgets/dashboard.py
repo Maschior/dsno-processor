@@ -6,7 +6,6 @@ import logging
 import tkinter as tk
 
 import customtkinter as ctk
-from PIL import Image
 
 from core.assets import get_asset_path
 from dsno_processor.i18n import t

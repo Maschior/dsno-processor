@@ -374,7 +374,6 @@ def import_customer_sheet(
     if not path.exists():
         raise FileNotFoundError(f"Customer sheet not found: {path}")
 
-    kwargs: dict = {}
     if sheet_name is not None:
         df = pd.read_excel(path, sheet_name=sheet_name)
     else:

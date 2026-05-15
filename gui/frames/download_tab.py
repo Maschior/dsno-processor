@@ -3,28 +3,13 @@
 from __future__ import annotations
 
 import logging
-import os
-import threading
-from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
-from PIL import Image
 
-from core.assets import get_asset_path
-from dsno_processor import process_dsno
-from dsno_processor.config import load_config, save_config
-from dsno_processor.control_reader import get_status_options, read_control_sheet
-from dsno_processor.ebs_download import DownloadConfig, run_download
-from dsno_processor.ebs_upload import UploadConfig, run_upload
-from dsno_processor.exceptions import CanceledError, ConfigurationError, LoginError
 from dsno_processor.i18n import t
-from gui.dialogs.import_wizards import ImportControlWizard, ImportWizard
-from gui.dialogs.language_menu import LanguageMenu
-from gui.dialogs.settings_window import SettingsWindow
 from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
 from gui.widgets.dashboard import ProgressDashboard
-from gui.widgets.dropdowns import MultiSelectDropdown
-from gui.widgets.inputs import DateInput, DateTimeInput, FilePickerRow
+from gui.widgets.inputs import DateTimeInput
 
 log = logging.getLogger(__name__)
 
@@ -67,18 +52,22 @@ class DownloadTabMixin:
             def __init__(self, e):
                 self.e = e
                 self.cb = []
-            def get(self): return self.e.get()
+            def get(self):
+                return self.e.get()
             def set(self, val):
                 self.e.delete(0, "end")
                 self.e.insert(0, val)
-                for c in self.cb: c()
+                for c in self.cb:
+                    c()
             def trace_add(self, mode, callback):
                 self.cb.append(callback)
 
         def _ent(r, default="", width=None, placeholder=""):
             e = ctk.CTkEntry(form, font=ctk.CTkFont(family=_FONT_FAMILY, size=12), placeholder_text=placeholder)
-            if width: e.configure(width=width)
-            if default: e.insert(0, default)
+            if width:
+                e.configure(width=width)
+            if default:
+                e.insert(0, default)
             e.grid(row=r, column=1, sticky="ew", pady=4, padx=(0, 6))
             var = _WrapperVar(e)
             e.bind("<KeyRelease>", lambda evt: [c() for c in var.cb])
@@ -106,7 +95,8 @@ class DownloadTabMixin:
         self.dl_date_end._set_datetime = lambda *a, **k: (orig_set_end(*a, **k), self._update_dl_run_btn_state())
         row += 1
         _lbl(t("dl.status_filter"), row)
-        self.dl_status_filter_var, _e = _ent(row, "", placeholder="Processed, Downloaded, <empty>"); row += 1
+        self.dl_status_filter_var, _e = _ent(row, "", placeholder="Processed, Downloaded, <empty>")
+        row += 1
 
         # Files
         ctk.CTkLabel(form, text=t("dl.section_files"), anchor="w",
@@ -119,13 +109,15 @@ class DownloadTabMixin:
         ctk.CTkButton(form, text=t("btn.browse"), width=70,
             command=self._browse_dl_dir,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-        ).grid(row=row, column=2, padx=(4, 6), pady=4); row += 1
+        ).grid(row=row, column=2, padx=(4, 6), pady=4)
+        row += 1
         _lbl(t("proc.control_sheet"), row)
         self.dl_sheet_var, _ = _ent(row, str(cfg.control_sheet) if cfg and str(cfg.control_sheet) != "." else "", placeholder="C:\\...")
         ctk.CTkButton(form, text=t("btn.browse"), width=70,
             command=self._browse_dl_sheet,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
-        ).grid(row=row, column=2, padx=(4, 6), pady=4); row += 1
+        ).grid(row=row, column=2, padx=(4, 6), pady=4)
+        row += 1
 
         # Connection
         ctk.CTkLabel(form, text=t("dl.section_connection"), anchor="w",
@@ -134,7 +126,8 @@ class DownloadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("dl.ebs_url"), row)
-        self.dl_url_var, _ = _ent(row, cfg.ebs_download_url if cfg else ""); row += 1
+        self.dl_url_var, _ = _ent(row, cfg.ebs_download_url if cfg else "")
+        row += 1
 
         # Columns
         ctk.CTkLabel(form, text=t("dl.section_columns"), anchor="w",
@@ -143,11 +136,14 @@ class DownloadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("dl.dsno_column"), row)
-        self.dl_dsno_col_var, _ = _ent(row, cfg.ebs_dsno_col if cfg else "ARGUMENT2"); row += 1
+        self.dl_dsno_col_var, _ = _ent(row, cfg.ebs_dsno_col if cfg else "ARGUMENT2")
+        row += 1
         _lbl(t("dl.date_column"), row)
-        self.dl_date_col_var, _ = _ent(row, cfg.ebs_date_col if cfg else "CREATION_DATE"); row += 1
+        self.dl_date_col_var, _ = _ent(row, cfg.ebs_date_col if cfg else "CREATION_DATE")
+        row += 1
         _lbl(t("dl.status_column"), row)
-        self.dl_status_col_var, _ = _ent(row, cfg.ebs_status_col if cfg else "STATUS"); row += 1
+        self.dl_status_col_var, _ = _ent(row, cfg.ebs_status_col if cfg else "STATUS")
+        row += 1
 
         # Folders
         ctk.CTkLabel(form, text=t("dl.section_folders"), anchor="w",
@@ -157,7 +153,8 @@ class DownloadTabMixin:
         row += 1
         indices_str = ",".join(str(x) for x in (cfg.ebs_folder_indices if cfg else [92, 95, 101]))
         _lbl(t("dl.folder_indices"), row)
-        self.dl_folders_var, _ = _ent(row, indices_str); row += 1
+        self.dl_folders_var, _ = _ent(row, indices_str)
+        row += 1
 
         # Start button
         self.dl_start_btn = ctk.CTkButton(

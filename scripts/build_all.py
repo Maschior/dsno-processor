@@ -33,7 +33,7 @@ def main():
     print("Gerando instalador...")
     run_command(f'"{iscc_path}" /dMyAppVersion={__version__} installer_setup.iss')
 
-    print(f"\nSucesso! O instalador foi gerado na pasta 'Output/'.")
+    print("\nSucesso! O instalador foi gerado na pasta 'Output/'.")
 
 if __name__ == "__main__":
     main()

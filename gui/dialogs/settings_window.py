@@ -26,7 +26,6 @@ from dsno_processor.config import (
 )
 from dsno_processor.i18n import SUPPORTED_LANGUAGES, t
 from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
-from gui.widgets.inputs import FilePickerRow
 
 
 class SettingsWindow(ctk.CTkToplevel):

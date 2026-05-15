@@ -2,29 +2,20 @@
 
 from __future__ import annotations
 
+import getpass
 import logging
-import os
-import threading
-from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 from PIL import Image
 
 from core.assets import get_asset_path
-from dsno_processor import process_dsno
-from dsno_processor.config import load_config, save_config
+from dsno_processor.config import load_config
 from dsno_processor.control_reader import get_status_options, read_control_sheet
-from dsno_processor.ebs_download import DownloadConfig, run_download
-from dsno_processor.ebs_upload import UploadConfig, run_upload
-from dsno_processor.exceptions import CanceledError, ConfigurationError, LoginError
 from dsno_processor.i18n import t
-from gui.dialogs.import_wizards import ImportControlWizard, ImportWizard
-from gui.dialogs.language_menu import LanguageMenu
-from gui.dialogs.settings_window import SettingsWindow
 from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
 from gui.widgets.dashboard import ProgressDashboard
 from gui.widgets.dropdowns import MultiSelectDropdown
-from gui.widgets.inputs import DateInput, DateTimeInput, FilePickerRow
+from gui.widgets.inputs import DateInput, FilePickerRow
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +96,7 @@ class ProcessorTabMixin:
             tab,
             label=t("proc.customer_sheet"),
             default=default_customer,
-            placeholder=f"Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\17-04-2026\\International Motors Shipment track 15.04.2026.xlsx",
+            placeholder="Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\17-04-2026\\International Motors Shipment track 15.04.2026.xlsx",
             browse_command=self._browse_customer,
             on_change=self._update_run_btn_state,
         )
@@ -125,7 +116,7 @@ class ProcessorTabMixin:
             tab,
             label=t("proc.dsno_directory"),
             default=default_dsno_dir,
-            placeholder=f"C:\\Users\\{os.getlogin()}\\edi-process",
+            placeholder=f"C:\\Users\\{getpass.getuser()}\\edi-process",
             browse_command=self._browse_dsno_dir,
             on_change=self._update_run_btn_state,
         )

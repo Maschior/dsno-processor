@@ -11,7 +11,6 @@ import shutil
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 import tomli_w
 

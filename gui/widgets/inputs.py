@@ -5,7 +5,6 @@ from __future__ import annotations
 import calendar
 import tkinter as tk
 from datetime import datetime
-from tkinter import filedialog
 from typing import Callable
 
 import customtkinter as ctk
@@ -115,11 +114,16 @@ class _CalendarPopup(ctk.CTkToplevel):
                 ).pack()
 
             def _upd_h(d):
-                self._hour = (self._hour + d) % 24; self._h_var.set(f"{self._hour:02d}")
+                self._hour = (self._hour + d) % 24
+                self._h_var.set(f"{self._hour:02d}")
+
             def _upd_m(d):
-                self._minute = (self._minute + d) % 60; self._m_var.set(f"{self._minute:02d}")
+                self._minute = (self._minute + d) % 60
+                self._m_var.set(f"{self._minute:02d}")
+
             def _upd_s(d):
-                self._second = (self._second + d) % 60; self._s_var.set(f"{self._second:02d}")
+                self._second = (self._second + d) % 60
+                self._s_var.set(f"{self._second:02d}")
 
             _spinner(spinners, "HH", self._h_var, _upd_h)
             ctk.CTkLabel(spinners, text=":", font=ctk.CTkFont(size=18, weight="bold"),
