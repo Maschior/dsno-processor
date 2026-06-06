@@ -1,0 +1,35 @@
+# Dependencies
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+
+# Build artifacts
+build
+dist
+
+# Runtime
+logs
+.env
+
+dsno_download_upload
+config.txt
+config.toml
+*.bak
+.antigravitycli
+
+.ruff_cache
+# Runtime/generated project artifacts
+*.log
+*.db
+*_history.json
+Output/
+
+# Company assets
+**/company-*.png
+**/company-*.svg
+
+.coverage
+.pytest_cache/
+.idea/

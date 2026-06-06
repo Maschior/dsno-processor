@@ -1,0 +1,16 @@
+pandas
+openpyxl
+customtkinter
+unidecode
+selenium
+tomli_w
+Pillow
+requests
+pyautogui
+pyscreeze
+pygetwindow
+pymsgbox
+pyperclip
+pyrect
+pytweening
+mouseinfo

@@ -1,0 +1,46 @@
+[general]
+language = "pt"
+
+[paths]
+dsno_directory = "."
+control_sheet = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\Control ASN Navistar.xlsx"
+customer_sheet = "."
+customer_sheet_pre_path = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR"
+
+[processor]
+bypass_file_size_check = false
+
+[customer_sheet.cols]
+invoice = "Invoice"
+booking = "Booking/HAWB"
+container = "Container"
+
+[customer_sheet.config]
+sheet_name = ""
+
+[control_sheet.cols]
+invoice = "INVOICE"
+dsno = "ARGUMENT2"
+date = "CREATION_DATE"
+status = "STATUS"
+freight_oracle = "FREIGHT_ORACLE"
+freight_softway = "FREIGHT_SOFTWAY"
+
+[ebs]
+download_url = "https://ebs.company.com/OA_HTML/RF.jsp?function_id=63093&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=placeholder"
+upload_url = "https://ebs.company.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=placeholder"
+download_dir = "."
+upload_dir = "."
+headless = false
+
+[ebs.folders]
+download_indices = [
+    92,
+    95,
+    101,
+]
+upload_index = 92
+
+[credentials]
+email = "user@company.com"
+password = "senha"
