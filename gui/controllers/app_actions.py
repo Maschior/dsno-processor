@@ -99,9 +99,7 @@ class AppActionsMixin:
 
     def _browse_customer(self) -> None:
         initial = (
-            self._customer_pre_path
-            if os.path.exists(self._customer_pre_path)
-            else None
+            self._customer_pre_path if os.path.exists(self._customer_pre_path) else None
         )
         path = filedialog.askopenfilename(
             title=t("browse.customer_sheet"),
@@ -178,7 +176,9 @@ class AppActionsMixin:
             status_filter,
             self._make_dashboard_progress_callback(self.dashboard),
         )
-        self._run_background(name="dsno-processor", target=self._process_thread, args=args)
+        self._run_background(
+            name="dsno-processor", target=self._process_thread, args=args
+        )
 
     def _process_thread(
         self,
@@ -202,7 +202,9 @@ class AppActionsMixin:
                 status_filter=status_filter,
             )
 
-            summary = t("msg.processing_complete", success=result.success, total=result.total)
+            summary = t(
+                "msg.processing_complete", success=result.success, total=result.total
+            )
             logging.info(summary)
             if result.failed > 0:
                 self._show_info_async(
@@ -220,11 +222,15 @@ class AppActionsMixin:
             )
         except LoginError as exc:
             logging.error("Login failed: %s", exc)
-            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dashboard, f"Login Error: {exc}")
+            self._run_on_ui_thread(
+                self._finish_dashboard_with_error, self.dashboard, f"Login Error: {exc}"
+            )
             self._show_error_async(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.error("Error during processing: %s", exc)
-            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dashboard, f"Error: {exc}")
+            self._run_on_ui_thread(
+                self._finish_dashboard_with_error, self.dashboard, f"Error: {exc}"
+            )
             self._show_error_async(t("settings.save_error_title"), str(exc))
         finally:
             self._run_on_ui_thread(self._finish_processing_ui)
@@ -255,7 +261,11 @@ class AppActionsMixin:
         self._clear_log()
 
         try:
-            folder_indices = [int(x.strip()) for x in self.dl_folders_var.get().split(",") if x.strip()]
+            folder_indices = [
+                int(x.strip())
+                for x in self.dl_folders_var.get().split(",")
+                if x.strip()
+            ]
         except ValueError:
             folder_indices = [92, 95, 101]
 
@@ -285,25 +295,43 @@ class AppActionsMixin:
 
     def _download_thread(self, config: DownloadConfig, progress_cb) -> None:
         try:
-            result = run_download(config, progress_callback=progress_cb, cancel_event=getattr(self, "_dl_cancel_event", None))
+            result = run_download(
+                config,
+                progress_callback=progress_cb,
+                cancel_event=getattr(self, "_dl_cancel_event", None),
+            )
             total = result["success"] + result["skipped"] + len(result["failures"])
-            summary = t("msg.download_complete", success=result['success'], total=total - result['skipped'])
+            summary = t(
+                "msg.download_complete",
+                success=result["success"],
+                total=total - result["skipped"],
+            )
             logging.getLogger("dsno_processor.ebs_download").info(summary)
             self._show_info_async(t("msg.download_title"), summary)
         except CanceledError:
-            logging.getLogger("dsno_processor.ebs_download").info("Download was cancelled by the user.")
+            logging.getLogger("dsno_processor.ebs_download").info(
+                "Download was cancelled by the user."
+            )
             self._run_on_ui_thread(
                 self._mark_dashboard_cancelled,
                 self.dl_dashboard,
                 t("msg.cancelled_by_user", default="Cancelled by user"),
             )
         except LoginError as exc:
-            logging.getLogger("dsno_processor.ebs_download").error("Login failed: %s", exc)
-            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dl_dashboard, f"Login Error: {exc}")
+            logging.getLogger("dsno_processor.ebs_download").error(
+                "Login failed: %s", exc
+            )
+            self._run_on_ui_thread(
+                self._finish_dashboard_with_error,
+                self.dl_dashboard,
+                f"Login Error: {exc}",
+            )
             self._show_error_async(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_download").error("Error: %s", exc)
-            self._run_on_ui_thread(self._finish_dashboard_with_error, self.dl_dashboard, f"Error: {exc}")
+            self._run_on_ui_thread(
+                self._finish_dashboard_with_error, self.dl_dashboard, f"Error: {exc}"
+            )
             self._show_error_async(t("settings.save_error_title"), str(exc))
         finally:
             self._run_on_ui_thread(self._finish_download_ui)
@@ -343,25 +371,39 @@ class AppActionsMixin:
 
     def _upload_thread(self, config: UploadConfig, progress_cb) -> None:
         try:
-            result = run_upload(config, progress_callback=progress_cb, cancel_event=getattr(self, "_ul_cancel_event", None))
+            result = run_upload(
+                config,
+                progress_callback=progress_cb,
+                cancel_event=getattr(self, "_ul_cancel_event", None),
+            )
             total = result["success"] + result["skipped"] + len(result["failures"])
-            summary = t("msg.upload_complete", success=result['success'], total=total)
+            summary = t("msg.upload_complete", success=result["success"], total=total)
             logging.getLogger("dsno_processor.ebs_upload").info(summary)
             self._show_info_async(t("msg.upload_title"), summary)
         except CanceledError:
-            logging.getLogger("dsno_processor.ebs_upload").info("Upload was cancelled by the user.")
+            logging.getLogger("dsno_processor.ebs_upload").info(
+                "Upload was cancelled by the user."
+            )
             self._run_on_ui_thread(
                 self._mark_dashboard_cancelled,
                 self.ul_dashboard,
                 t("msg.cancelled_by_user", default="Cancelled by user"),
             )
         except LoginError as exc:
-            logging.getLogger("dsno_processor.ebs_upload").error("Login failed: %s", exc)
-            self._run_on_ui_thread(self._finish_dashboard_with_error, self.ul_dashboard, f"Login Error: {exc}")
+            logging.getLogger("dsno_processor.ebs_upload").error(
+                "Login failed: %s", exc
+            )
+            self._run_on_ui_thread(
+                self._finish_dashboard_with_error,
+                self.ul_dashboard,
+                f"Login Error: {exc}",
+            )
             self._show_error_async(t("settings.save_error_title"), str(exc))
         except Exception as exc:
             logging.getLogger("dsno_processor.ebs_upload").error("Error: %s", exc)
-            self._run_on_ui_thread(self._finish_dashboard_with_error, self.ul_dashboard, f"Error: {exc}")
+            self._run_on_ui_thread(
+                self._finish_dashboard_with_error, self.ul_dashboard, f"Error: {exc}"
+            )
             self._show_error_async(t("settings.save_error_title"), str(exc))
         finally:
             self._run_on_ui_thread(self._finish_upload_ui)
@@ -389,7 +431,7 @@ class AppActionsMixin:
         """Callback from LanguageMenu to update application language."""
         if not self._app_config:
             return
-            
+
         if self._app_config.language == lang_code:
             return
 
@@ -397,8 +439,7 @@ class AppActionsMixin:
         try:
             save_config(self._app_config)
             messagebox.showinfo(
-                t("settings.saved_title"),
-                t("settings.general.restart_msg")
+                t("settings.saved_title"), t("settings.general.restart_msg")
             )
         except Exception as e:
             messagebox.showerror(t("settings.save_error_title"), str(e))

@@ -121,13 +121,13 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection) -> None:
     """Create tables if they do not already exist."""
     conn.executescript(_SCHEMA_SQL)
-    
+
     # Simple migration: add DESCRIPTION column if it doesn't exist
     try:
         conn.execute("ALTER TABLE tb_control ADD COLUMN DESCRIPTION VARCHAR")
     except sqlite3.OperationalError:
         pass  # Column already exists
-        
+
     log.info("Database schema initialized.")
 
 
@@ -144,9 +144,13 @@ def insert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            record.delivery_id, record.invoice, record.dsno_filename,
-            record.creation_date, record.status,
-            record.freight_oracle, record.freight_softway,
+            record.delivery_id,
+            record.invoice,
+            record.dsno_filename,
+            record.creation_date,
+            record.status,
+            record.freight_oracle,
+            record.freight_softway,
             record.description,
         ),
     )
@@ -172,9 +176,13 @@ def upsert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
             DESCRIPTION     = COALESCE(excluded.DESCRIPTION, tb_control.DESCRIPTION)
         """,
         (
-            record.delivery_id, record.invoice, record.dsno_filename,
-            record.creation_date, record.status,
-            record.freight_oracle, record.freight_softway,
+            record.delivery_id,
+            record.invoice,
+            record.dsno_filename,
+            record.creation_date,
+            record.status,
+            record.freight_oracle,
+            record.freight_softway,
             record.description,
         ),
     )
@@ -213,7 +221,12 @@ def get_control_pairs(
     query += " ORDER BY CREATION_DATE"
     rows = conn.execute(query, params).fetchall()
     return [
-        (row["INVOICE"], row["DSNO_FILENAME"], row["FREIGHT_ORACLE"], row["FREIGHT_SOFTWAY"])
+        (
+            row["INVOICE"],
+            row["DSNO_FILENAME"],
+            row["FREIGHT_ORACLE"],
+            row["FREIGHT_SOFTWAY"],
+        )
         for row in rows
     ]
 
@@ -285,8 +298,13 @@ def insert_shipment(conn: sqlite3.Connection, record: ShipmentRecord) -> int:
             (DELIVERY_ID, ESN, INVOICE, BOOKING, CONTAINER)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (record.delivery_id, record.esn, record.invoice,
-         record.booking, record.container),
+        (
+            record.delivery_id,
+            record.esn,
+            record.invoice,
+            record.booking,
+            record.container,
+        ),
     )
     conn.commit()
     return cursor.lastrowid
@@ -310,8 +328,13 @@ def upsert_shipment(conn: sqlite3.Connection, record: ShipmentRecord) -> int:
             BOOKING     = excluded.BOOKING,
             CONTAINER   = excluded.CONTAINER
         """,
-        (record.delivery_id, record.esn, record.invoice,
-         record.booking, record.container),
+        (
+            record.delivery_id,
+            record.esn,
+            record.invoice,
+            record.booking,
+            record.container,
+        ),
     )
     conn.commit()
     return cursor.lastrowid
@@ -381,7 +404,7 @@ def import_customer_sheet(
         xls = pd.ExcelFile(path)
         sheet_names = xls.sheet_names
         df = None
-        
+
         inv_col_upper = invoice_col.upper()
         # Resolve booking column: accept a single name or a list of aliases
         booking_aliases = (
@@ -399,14 +422,14 @@ def import_customer_sheet(
                 .str.replace(r"\s+", " ", regex=True)
             )
             candidate.columns = cols
-            
+
             has_inv = inv_col_upper in cols
             has_bk = any(a in cols for a in booking_aliases)
-            
+
             if has_inv and has_bk:
                 df = candidate
                 break
-                
+
         if df is None:
             # Fall back to first sheet to throw a clear error
             df = pd.read_excel(xls, sheet_name=0)
@@ -464,7 +487,12 @@ def import_customer_sheet(
             skipped += 1
         except Exception as exc:
             log.warning("Skipping invoice %s: %s", invoice_val, exc)
-    log.info("Imported %d shipment records from %s (%d skipped)", imported, path.name, skipped)
+    log.info(
+        "Imported %d shipment records from %s (%d skipped)",
+        imported,
+        path.name,
+        skipped,
+    )
     return imported, skipped
 
 
@@ -544,7 +572,7 @@ def import_control_sheet(
     df[dt_col] = pd.to_datetime(df[dt_col], errors="coerce")
 
     # Garante que não haverá DSNO repetidos importados da planilha
-    df = df.drop_duplicates(subset=[dsno_c], keep='first')
+    df = df.drop_duplicates(subset=[dsno_c], keep="first")
 
     for _, row in df.iterrows():
         invoice_val = row.get(inv_col)
@@ -586,5 +614,7 @@ def import_control_sheet(
             log.warning("Skipping DSNO %s: %s", dsno_val, exc)
             skipped += 1
 
-    log.info("Imported %d control records from %s (%d skipped)", imported, path.name, skipped)
+    log.info(
+        "Imported %d control records from %s (%d skipped)", imported, path.name, skipped
+    )
     return imported, skipped

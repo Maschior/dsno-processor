@@ -9,7 +9,12 @@ from pathlib import Path
 from .control_reader import get_invoice_dsno_pairs, read_control_sheet
 from .customer_reader import get_dsno_info, read_customer_sheet
 from .config import AppConfig, load_config
-from .database import get_connection, get_db_path, get_shipment_info, update_statuses_for_processed
+from .database import (
+    get_connection,
+    get_db_path,
+    get_shipment_info,
+    update_statuses_for_processed,
+)
 from .editor import edit_navstar_dsno, move_to_processed, normalize_file, get_size
 from .exceptions import CanceledError, ColumnMissingError, SheetNotFoundError
 from .models import DateRange, DsnoInfo, FreightMode, ProcessingResult
@@ -65,16 +70,16 @@ def _resolve_freight(
 
     Rules:
       - **AIR mode**: Prefer Softway. If not available, fall back to Oracle.
-      - **SEA mode**: If Softway differs from Oracle and is not null, 
+      - **SEA mode**: If Softway differs from Oracle and is not null,
         prefer Softway. Otherwise, fall back to Oracle.
     """
-    
+
     def _clean(val: object) -> str:
         if val is None:
             return ""
         s = str(val).strip()
         return "" if s.lower() in ("nan", "") else s
-    
+
     oracle = _clean(oracle_freight)
     softway = _clean(softway_freight)
 
@@ -93,7 +98,7 @@ def _resolve_freight(
             log.warning(error)
             return oracle, error
         return softway, None
-    
+
     if mode == FreightMode.SEA:
         if softway and softway != oracle:
             log.warning("Softway freight differs from Oracle. Using Softway freight.")
@@ -102,7 +107,7 @@ def _resolve_freight(
 
     fallback_error = f"Unhandled freight mode: {mode}. Using Softway if available; otherwise, Oracle."
     log.warning(fallback_error)
-    
+
     return (softway, fallback_error) if softway else (oracle, fallback_error)
 
 
@@ -268,20 +273,30 @@ def process_dsno(
         cfg = _safe_config()
         if getattr(cfg.general, "data_source", "spreadsheet") == "database":
             from .database import get_db_path, get_connection, get_control_pairs
+
             conn = get_connection(get_db_path())
-            pairs = get_control_pairs(conn, parsed_range.start, parsed_range.end, status_filter=status_filter)
+            pairs = get_control_pairs(
+                conn, parsed_range.start, parsed_range.end, status_filter=status_filter
+            )
             conn.close()
         else:
             control_sheet_df = read_control_sheet(control_sheet)
-            pairs = get_invoice_dsno_pairs(parsed_range, control_sheet_df, status_filter=status_filter)
+            pairs = get_invoice_dsno_pairs(
+                parsed_range, control_sheet_df, status_filter=status_filter
+            )
     except Exception as exc:
         log.error("Failed to read control data: %s", exc)
-        _cb("error", {"name": "System", "detail": f"Failed to read control data: {exc}"})
+        _cb(
+            "error", {"name": "System", "detail": f"Failed to read control data: {exc}"}
+        )
         return result
 
     if not pairs:
         log.info("No DSNO files found matching the criteria.")
-        _cb("error", {"name": "System", "detail": "No DSNO files found matching the criteria."})
+        _cb(
+            "error",
+            {"name": "System", "detail": "No DSNO files found matching the criteria."},
+        )
         return result
 
     if cancel_event and cancel_event.is_set():
@@ -334,12 +349,14 @@ def process_dsno(
     if getattr(cfg.general, "data_source", "spreadsheet") == "spreadsheet":
         _cb("phase", {"text": "Updating control sheet..."})
         update_control_sheet_status(control_sheet, processed_dir)
-        
+
         # Also update database statuses if the DB exists (legacy fallback behavior)
         try:
             db_path = get_db_path()
             if db_path.exists() and processed_dir.exists():
-                processed_files = {f.name for f in processed_dir.iterdir() if f.is_file()}
+                processed_files = {
+                    f.name for f in processed_dir.iterdir() if f.is_file()
+                }
                 if processed_files:
                     conn = get_connection(db_path)
                     db_updated = update_statuses_for_processed(conn, processed_files)
@@ -353,7 +370,9 @@ def process_dsno(
         try:
             db_path = get_db_path()
             if db_path.exists() and processed_dir.exists():
-                processed_files = {f.name for f in processed_dir.iterdir() if f.is_file()}
+                processed_files = {
+                    f.name for f in processed_dir.iterdir() if f.is_file()
+                }
                 if processed_files:
                     conn = get_connection(db_path)
                     db_updated = update_statuses_for_processed(conn, processed_files)

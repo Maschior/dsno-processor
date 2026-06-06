@@ -43,7 +43,10 @@ class UploadTabMixin:
 
         def _lbl(text, r):
             ctk.CTkLabel(
-                form, text=text, anchor="w", width=150,
+                form,
+                text=text,
+                anchor="w",
+                width=150,
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             ).grid(row=r, column=0, padx=(6, 8), pady=5, sticky="w")
 
@@ -51,18 +54,25 @@ class UploadTabMixin:
             def __init__(self, e):
                 self.e = e
                 self.cb = []
+
             def get(self):
                 return self.e.get()
+
             def set(self, val):
                 self.e.delete(0, "end")
                 self.e.insert(0, val)
                 for c in self.cb:
                     c()
+
             def trace_add(self, mode, callback):
                 self.cb.append(callback)
 
         def _ent(r, default="", placeholder=""):
-            e = ctk.CTkEntry(form, font=ctk.CTkFont(family=_FONT_FAMILY, size=12), placeholder_text=placeholder)
+            e = ctk.CTkEntry(
+                form,
+                font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
+                placeholder_text=placeholder,
+            )
             if default:
                 e.insert(0, default)
             e.grid(row=r, column=1, sticky="ew", pady=5, padx=(0, 6))
@@ -72,7 +82,10 @@ class UploadTabMixin:
             return var
 
         # Connection
-        ctk.CTkLabel(form, text=t("dl.section_connection"), anchor="w",
+        ctk.CTkLabel(
+            form,
+            text=t("dl.section_connection"),
+            anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
@@ -82,34 +95,50 @@ class UploadTabMixin:
         row += 1
 
         # Files
-        ctk.CTkLabel(form, text=t("dl.section_files"), anchor="w",
+        ctk.CTkLabel(
+            form,
+            text=t("dl.section_files"),
+            anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("ul.upload_dir"), row)
-        self.ul_dir_var = _ent(row, str(cfg.upload_dir) if cfg and str(cfg.upload_dir) != "." else "", placeholder="C:\\...")
-        ctk.CTkButton(form, text=t("btn.browse"), width=70,
+        self.ul_dir_var = _ent(
+            row,
+            str(cfg.upload_dir) if cfg and str(cfg.upload_dir) != "." else "",
+            placeholder="C:\\...",
+        )
+        ctk.CTkButton(
+            form,
+            text=t("btn.browse"),
+            width=70,
             command=self._browse_ul_dir,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
         ).grid(row=row, column=2, padx=(4, 6), pady=5)
         row += 1
 
         # Folders
-        ctk.CTkLabel(form, text=t("dl.section_folders"), anchor="w",
+        ctk.CTkLabel(
+            form,
+            text=t("dl.section_folders"),
+            anchor="w",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11, weight="bold"),
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("ul.folder_index"), row)
-        self.ul_folder_var = _ent(row, str(cfg.ebs_upload_folder_index) if cfg else "92")
+        self.ul_folder_var = _ent(
+            row, str(cfg.ebs_upload_folder_index) if cfg else "92"
+        )
         row += 1
 
         # Start button
         self.ul_start_btn = ctk.CTkButton(
             tab,
             text=t("ul.start_btn"),
-            height=40, corner_radius=10,
+            height=40,
+            corner_radius=10,
             fg_color=("#e65100", "#bf360c"),
             hover_color=("#f57c00", "#e65100"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
@@ -119,10 +148,17 @@ class UploadTabMixin:
 
         # ── Progress sub-tab ─────────────────────────────────────
         prog_tab = inner_tab.tab(self._UL_TAB_PROGRESS)
-        
+
         self.ul_dashboard = ProgressDashboard(
             prog_tab,
-            cancel_command=lambda: (self._show_blocking_overlay(), getattr(self,("_ul_cancel_event")).set()) if hasattr(self, "_ul_cancel_event") else None
+            cancel_command=lambda: (
+                (
+                    self._show_blocking_overlay(),
+                    getattr(self, ("_ul_cancel_event")).set(),
+                )
+                if hasattr(self, "_ul_cancel_event")
+                else None
+            ),
         )
         self.ul_dashboard.pack(fill="both", expand=True, pady=4)
 
@@ -133,11 +169,11 @@ class UploadTabMixin:
         """Enable or disable the Upload Start button based on field completion."""
         if not hasattr(self, "ul_start_btn"):
             return
-            
+
         c1 = self.ul_url_var.get().strip() if hasattr(self, "ul_url_var") else ""
         c2 = self.ul_dir_var.get().strip() if hasattr(self, "ul_dir_var") else ""
         c3 = self.ul_folder_var.get().strip() if hasattr(self, "ul_folder_var") else ""
-        
+
         is_ready = bool(c1 and c2 and c3)
 
         self.ul_start_btn.configure(
@@ -148,4 +184,3 @@ class UploadTabMixin:
     # ──────────────────────────────────────────────────────────────
     # Browse dialogs — Processor
     # ──────────────────────────────────────────────────────────────
-

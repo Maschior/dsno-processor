@@ -114,7 +114,10 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            image=ctk.CTkImage(light_image=Image.open(get_asset_path("assets/icons/cancel_light.png")), dark_image=Image.open(get_asset_path("assets/icons/cancel_dark.png"))),
+            image=ctk.CTkImage(
+                light_image=Image.open(get_asset_path("assets/icons/cancel_light.png")),
+                dark_image=Image.open(get_asset_path("assets/icons/cancel_dark.png")),
+            ),
             text=t("btn.cancel"),
             height=38,
             corner_radius=10,
@@ -126,7 +129,10 @@ class SettingsWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            image=ctk.CTkImage(light_image=Image.open(get_asset_path("assets/icons/save_light.png")), dark_image=Image.open(get_asset_path("assets/icons/save_dark.png"))),
+            image=ctk.CTkImage(
+                light_image=Image.open(get_asset_path("assets/icons/save_light.png")),
+                dark_image=Image.open(get_asset_path("assets/icons/save_dark.png")),
+            ),
             text=t("btn.save"),
             height=38,
             corner_radius=10,
@@ -151,13 +157,14 @@ class SettingsWindow(ctk.CTkToplevel):
         tab = self._tabview.tab(t("settings.tab.general"))
         form = self._make_form(tab)
 
-        self._tab_hint(
-            form, t("settings.general.hint")
-        )
+        self._tab_hint(form, t("settings.general.hint"))
 
         row = 1
         ctk.CTkLabel(
-            form, text=t("settings.general.language"), anchor="w", width=150,
+            form,
+            text=t("settings.general.language"),
+            anchor="w",
+            width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
@@ -177,16 +184,22 @@ class SettingsWindow(ctk.CTkToplevel):
         self._hint_label(
             form,
             t("settings.general.language_hint"),
-            row+1,
+            row + 1,
         )
 
         row += 2
         ctk.CTkLabel(
-            form, text=t("settings.general.data_source"), anchor="w", width=150,
+            form,
+            text=t("settings.general.data_source"),
+            anchor="w",
+            width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
-        data_source_options = [t("settings.data_source.spreadsheet"), t("settings.data_source.database")]
+        data_source_options = [
+            t("settings.data_source.spreadsheet"),
+            t("settings.data_source.database"),
+        ]
         current_data_source = cfg.general.data_source if cfg else "spreadsheet"
         current_data_source_display = t(f"settings.data_source.{current_data_source}")
 
@@ -201,39 +214,49 @@ class SettingsWindow(ctk.CTkToplevel):
         self._hint_label(
             form,
             t("settings.general.data_source_hint"),
-            row+1,
+            row + 1,
         )
 
     def _build_tab_paths(self, cfg) -> None:
         tab = self._tabview.tab(t("settings.tab.paths"))
         form = self._make_form(tab)
 
-        self._tab_hint(
-            form, t("settings.paths.hint")
-        )
+        self._tab_hint(form, t("settings.paths.hint"))
 
         self._add_path_field(
-            form, 1, t("proc.dsno_directory"), "dsno_directory",
+            form,
+            1,
+            t("proc.dsno_directory"),
+            "dsno_directory",
             str(cfg.paths.dsno_directory) if cfg else "",
             mode="dir",
             hint=t("settings.paths.dsno_directory_hint"),
         )
         self._add_path_field(
-            form, 3, t("proc.control_sheet"), "control_sheet",
+            form,
+            3,
+            t("proc.control_sheet"),
+            "control_sheet",
             str(cfg.paths.control_sheet) if cfg else "",
             mode="file",
             filetypes=[("Excel", "*.xlsx *.xls")],
             hint=t("settings.paths.control_sheet_hint"),
         )
         self._add_path_field(
-            form, 5, t("proc.customer_sheet"), "customer_sheet",
+            form,
+            5,
+            t("proc.customer_sheet"),
+            "customer_sheet",
             str(cfg.paths.customer_sheet) if cfg else "",
             mode="file",
             filetypes=[("Excel", "*.xlsx *.xls")],
             hint=t("settings.paths.customer_sheet_hint"),
         )
         self._add_path_field(
-            form, 7, t("settings.paths.customer_pre_path"), "customer_sheet_pre_path",
+            form,
+            7,
+            t("settings.paths.customer_pre_path"),
+            "customer_sheet_pre_path",
             str(cfg.paths.customer_sheet_pre_path) if cfg else "",
             mode="dir",
             hint=t("settings.paths.customer_pre_path_hint"),
@@ -243,9 +266,7 @@ class SettingsWindow(ctk.CTkToplevel):
         tab = self._tabview.tab(t("settings.tab.processor"))
         form = self._make_form(tab)
 
-        self._tab_hint(
-            form, t("settings.processor.hint")
-        )
+        self._tab_hint(form, t("settings.processor.hint"))
 
         # Bypass file size verification toggle
         row = 1
@@ -257,12 +278,17 @@ class SettingsWindow(ctk.CTkToplevel):
         row += 1
 
         ctk.CTkLabel(
-            form, text=t("settings.processor.bypass_file_size_check"), anchor="w", width=240,
+            form,
+            text=t("settings.processor.bypass_file_size_check"),
+            anchor="w",
+            width=240,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
         self._bypass_size_check_var = tk.BooleanVar(
-            value=bool(getattr(cfg, "processor", None).bypass_file_size_check) if cfg else False
+            value=bool(getattr(cfg, "processor", None).bypass_file_size_check)
+            if cfg
+            else False
         )
         ctk.CTkSwitch(
             form,
@@ -277,28 +303,38 @@ class SettingsWindow(ctk.CTkToplevel):
         tab = self._tabview.tab(t("settings.tab.ebs"))
         form = self._make_form(tab)
 
-        self._tab_hint(
-            form, t("settings.ebs.hint")
-        )
+        self._tab_hint(form, t("settings.ebs.hint"))
 
         self._add_text_field(
-            form, 1, t("settings.ebs.download_url"), "ebs_download_url",
+            form,
+            1,
+            t("settings.ebs.download_url"),
+            "ebs_download_url",
             cfg.ebs.download_url if cfg else "",
             hint=t("settings.ebs.download_url_hint"),
         )
         self._add_text_field(
-            form, 3, t("settings.ebs.upload_url"), "ebs_upload_url",
+            form,
+            3,
+            t("settings.ebs.upload_url"),
+            "ebs_upload_url",
             cfg.ebs.upload_url if cfg else "",
             hint=t("settings.ebs.upload_url_hint"),
         )
         self._add_path_field(
-            form, 5, t("dl.download_dir"), "download_dir",
+            form,
+            5,
+            t("dl.download_dir"),
+            "download_dir",
             str(cfg.ebs.download_dir) if cfg else "",
             mode="dir",
             hint=t("settings.ebs.download_dir_hint"),
         )
         self._add_path_field(
-            form, 7, t("ul.upload_dir"), "upload_dir",
+            form,
+            7,
+            t("ul.upload_dir"),
+            "upload_dir",
             str(cfg.ebs.upload_dir) if cfg else "",
             mode="dir",
             hint=t("settings.ebs.upload_dir_hint"),
@@ -314,13 +350,14 @@ class SettingsWindow(ctk.CTkToplevel):
         row += 1
 
         ctk.CTkLabel(
-            form, text=t("settings.ebs.headless"), anchor="w", width=150,
+            form,
+            text=t("settings.ebs.headless"),
+            anchor="w",
+            width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
-        self._headless_var = tk.BooleanVar(
-            value=cfg.ebs.headless if cfg else False
-        )
+        self._headless_var = tk.BooleanVar(value=cfg.ebs.headless if cfg else False)
         ctk.CTkSwitch(
             form,
             text=t("settings.ebs.headless_switch"),
@@ -334,71 +371,104 @@ class SettingsWindow(ctk.CTkToplevel):
         tab = self._tabview.tab(t("dl.section_columns"))
         form = self._make_form(tab)
         row = 0
-        
+
         ctk.CTkLabel(
-            form, text=t("settings.columns.control_columns_section"),
+            form,
+            text=t("settings.columns.control_columns_section"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             text_color=("#1f6aa5", "#3a9ad9"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 5))
         row += 1
-        
+
         row = self._add_text_field(
-            form, row, t("dl.invoice_column"), "ebs_col_invoice",
+            form,
+            row,
+            t("dl.invoice_column"),
+            "ebs_col_invoice",
             (cfg.control_sheet_cols.invoice if cfg else "INVOICE"),
             hint=t("settings.columns.invoice_hint"),
         )
         row = self._add_text_field(
-            form, row, t("dl.dsno_column"), "ebs_col_dsno",
+            form,
+            row,
+            t("dl.dsno_column"),
+            "ebs_col_dsno",
             (cfg.control_sheet_cols.dsno if cfg else "ARGUMENT2"),
             hint=t("settings.columns.dsno_hint"),
         )
         row = self._add_text_field(
-            form, row, t("dl.date_column"), "ebs_col_date",
+            form,
+            row,
+            t("dl.date_column"),
+            "ebs_col_date",
             (cfg.control_sheet_cols.date if cfg else "CREATION_DATE"),
             hint=t("settings.columns.date_hint"),
         )
         row = self._add_text_field(
-            form, row, t("dl.status_column"), "ebs_col_status",
+            form,
+            row,
+            t("dl.status_column"),
+            "ebs_col_status",
             (cfg.control_sheet_cols.status if cfg else "STATUS"),
             hint=t("settings.columns.status_hint"),
         )
         row = self._add_text_field(
-            form, row, t("dl.description_column"), "ebs_col_description",
+            form,
+            row,
+            t("dl.description_column"),
+            "ebs_col_description",
             (cfg.control_sheet_cols.description if cfg else "Obs"),
             hint=t("settings.columns.description_hint"),
         )
 
         # ── Customer Sheet Section ─────────────────────────────────
         ctk.CTkLabel(
-            form, text=t("settings.columns.customer_columns_section"),
+            form,
+            text=t("settings.columns.customer_columns_section"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             text_color=("#1f6aa5", "#3a9ad9"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 5))
         row += 1
 
         row = self._add_text_field(
-            form, row, t("settings.columns.cust_invoice"), "cust_col_invoice",
+            form,
+            row,
+            t("settings.columns.cust_invoice"),
+            "cust_col_invoice",
             (cfg.customer_sheet_cols.invoice if cfg else "Invoice"),
         )
         row = self._add_text_field(
-            form, row, t("settings.columns.cust_booking"), "cust_col_booking",
+            form,
+            row,
+            t("settings.columns.cust_booking"),
+            "cust_col_booking",
             (cfg.customer_sheet_cols.booking if cfg else "Booking/HAWB"),
         )
         row = self._add_text_field(
-            form, row, t("settings.columns.cust_container"), "cust_col_container",
+            form,
+            row,
+            t("settings.columns.cust_container"),
+            "cust_col_container",
             (cfg.customer_sheet_cols.container if cfg else "Container"),
         )
-        
+
         ctk.CTkLabel(
-            form, text=t("settings.columns.customer_config_section"),
+            form,
+            text=t("settings.columns.customer_config_section"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
             text_color=("#1f6aa5", "#3a9ad9"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(15, 5))
         row += 1
         row = self._add_text_field(
-            form, row, t("settings.columns.cust_sheet_name", default="Sheet Name"), "cust_sheet_name",
+            form,
+            row,
+            t("settings.columns.cust_sheet_name", default="Sheet Name"),
+            "cust_sheet_name",
             (cfg.customer_sheet_properties.sheet_name if cfg else ""),
-            hint=t("settings.columns.cust_sheet_name_hint", default="Leave empty to use the first sheet"),
+            hint=t(
+                "settings.columns.cust_sheet_name_hint",
+                default="Leave empty to use the first sheet",
+            ),
         )
 
     def _build_tab_folders(self, cfg) -> None:
@@ -416,12 +486,18 @@ class SettingsWindow(ctk.CTkToplevel):
             else "92, 95, 101"
         )
         self._add_text_field(
-            form, 1, t("settings.folders.download_indices"), "ebs_folders_download",
+            form,
+            1,
+            t("settings.folders.download_indices"),
+            "ebs_folders_download",
             indices,
             hint=t("settings.folders.download_indices_hint"),
         )
         self._add_text_field(
-            form, 3, t("settings.folders.upload_index"), "ebs_folder_upload",
+            form,
+            3,
+            t("settings.folders.upload_index"),
+            "ebs_folder_upload",
             str(cfg.ebs.folders.upload_index) if cfg else "92",
             hint=t("settings.folders.upload_index_hint"),
         )
@@ -436,7 +512,10 @@ class SettingsWindow(ctk.CTkToplevel):
         )
 
         self._add_text_field(
-            form, 1, t("settings.credentials.email"), "cred_email",
+            form,
+            1,
+            t("settings.credentials.email"),
+            "cred_email",
             cfg.credentials.email if cfg else "",
             hint=t("settings.credentials.email_hint"),
         )
@@ -447,13 +526,14 @@ class SettingsWindow(ctk.CTkToplevel):
         row += 1
 
         ctk.CTkLabel(
-            form, text=t("settings.credentials.password"), anchor="w", width=150,
+            form,
+            text=t("settings.credentials.password"),
+            anchor="w",
+            width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
-        var = tk.StringVar(
-            value=cfg.credentials.password if cfg else ""
-        )
+        var = tk.StringVar(value=cfg.credentials.password if cfg else "")
         self._password_entry = ctk.CTkEntry(
             form,
             textvariable=var,
@@ -513,8 +593,13 @@ class SettingsWindow(ctk.CTkToplevel):
         ).grid(row=row, column=0, columnspan=3, sticky="ew", pady=(8, 0))
 
     def _add_text_field(
-        self, parent, row: int, label: str, key: str,
-        default: str = "", show: str | None = None,
+        self,
+        parent,
+        row: int,
+        label: str,
+        key: str,
+        default: str = "",
+        show: str | None = None,
         hint: str | None = None,
     ) -> int:
         if hint:
@@ -522,7 +607,10 @@ class SettingsWindow(ctk.CTkToplevel):
             row += 1
 
         ctk.CTkLabel(
-            parent, text=label, anchor="w", width=150,
+            parent,
+            text=label,
+            anchor="w",
+            width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
@@ -534,15 +622,25 @@ class SettingsWindow(ctk.CTkToplevel):
         if show:
             entry_kwargs["show"] = show
         ctk.CTkEntry(parent, **entry_kwargs).grid(
-            row=row, column=1, sticky="ew", pady=3, columnspan=2,
+            row=row,
+            column=1,
+            sticky="ew",
+            pady=3,
+            columnspan=2,
         )
 
         self._vars[key] = var
         return row + 1
 
     def _add_path_field(
-        self, parent, row: int, label: str, key: str,
-        default: str = "", mode: str = "dir", filetypes=None,
+        self,
+        parent,
+        row: int,
+        label: str,
+        key: str,
+        default: str = "",
+        mode: str = "dir",
+        filetypes=None,
         hint: str | None = None,
     ) -> int:
         if hint:
@@ -550,13 +648,17 @@ class SettingsWindow(ctk.CTkToplevel):
             row += 1
 
         ctk.CTkLabel(
-            parent, text=label, anchor="w", width=150,
+            parent,
+            text=label,
+            anchor="w",
+            width=150,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
 
         var = tk.StringVar(value=default)
         ctk.CTkEntry(
-            parent, textvariable=var,
+            parent,
+            textvariable=var,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
         ).grid(row=row, column=1, sticky="ew", pady=3)
 
@@ -570,7 +672,9 @@ class SettingsWindow(ctk.CTkToplevel):
 
         # Validity indicator
         indicator = ctk.CTkLabel(
-            btn_frame, text="", width=20,
+            btn_frame,
+            text="",
+            width=20,
             font=ctk.CTkFont(size=13),
         )
         indicator.pack(side="left", padx=(0, 2))
@@ -578,9 +682,7 @@ class SettingsWindow(ctk.CTkToplevel):
 
         def _browse():
             if mode == "dir":
-                result = filedialog.askdirectory(
-                    title=f"Select {label.rstrip(':')}"
-                )
+                result = filedialog.askdirectory(title=f"Select {label.rstrip(':')}")
             else:
                 result = filedialog.askopenfilename(
                     title=f"Select {label.rstrip(':')}",
@@ -591,7 +693,10 @@ class SettingsWindow(ctk.CTkToplevel):
                 self._update_indicator(key, result, mode)
 
         ctk.CTkButton(
-            btn_frame, text=t("btn.browse"), width=70, command=_browse,
+            btn_frame,
+            text=t("btn.browse"),
+            width=70,
+            command=_browse,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
         ).pack(side="left")
 
@@ -611,6 +716,7 @@ class SettingsWindow(ctk.CTkToplevel):
             indicator.configure(text="")
             return
         from pathlib import Path as _P
+
         path = _P(value)
         if mode == "dir":
             exists = path.is_dir()
@@ -652,15 +758,20 @@ class SettingsWindow(ctk.CTkToplevel):
         except ValueError:
             upload_folder_index = 92
 
-
-        selected_display = getattr(self, "language_var", tk.StringVar(value="English")).get()
+        selected_display = getattr(
+            self, "language_var", tk.StringVar(value="English")
+        ).get()
         selected_code = "en"
         for code, disp in SUPPORTED_LANGUAGES.items():
             if disp == selected_display:
                 selected_code = code
                 break
 
-        selected_ds_display = getattr(self, "data_source_var", tk.StringVar(value=t("settings.data_source.spreadsheet"))).get()
+        selected_ds_display = getattr(
+            self,
+            "data_source_var",
+            tk.StringVar(value=t("settings.data_source.spreadsheet")),
+        ).get()
         selected_ds_code = "spreadsheet"
         if selected_ds_display == t("settings.data_source.database"):
             selected_ds_code = "database"
@@ -677,23 +788,43 @@ class SettingsWindow(ctk.CTkToplevel):
             ),
             processor=ProcessorConfig(
                 bypass_file_size_check=bool(
-                    getattr(self, "_bypass_size_check_var", tk.BooleanVar(value=False)).get()
+                    getattr(
+                        self, "_bypass_size_check_var", tk.BooleanVar(value=False)
+                    ).get()
                 ),
             ),
             control_sheet_cols=ControlSheetColsConfig(
-                invoice=self._vars.get("ebs_col_invoice", tk.StringVar(value="INVOICE")).get(),
-                dsno=self._vars.get("ebs_col_dsno", tk.StringVar(value="ARGUMENT2")).get(),
-                date=self._vars.get("ebs_col_date", tk.StringVar(value="CREATION_DATE")).get(),
-                status=self._vars.get("ebs_col_status", tk.StringVar(value="STATUS")).get(),
-                description=self._vars.get("ebs_col_description", tk.StringVar(value="Obs")).get(),
+                invoice=self._vars.get(
+                    "ebs_col_invoice", tk.StringVar(value="INVOICE")
+                ).get(),
+                dsno=self._vars.get(
+                    "ebs_col_dsno", tk.StringVar(value="ARGUMENT2")
+                ).get(),
+                date=self._vars.get(
+                    "ebs_col_date", tk.StringVar(value="CREATION_DATE")
+                ).get(),
+                status=self._vars.get(
+                    "ebs_col_status", tk.StringVar(value="STATUS")
+                ).get(),
+                description=self._vars.get(
+                    "ebs_col_description", tk.StringVar(value="Obs")
+                ).get(),
             ),
             customer_sheet_cols=CustomerSheetColsConfig(
-                invoice=self._vars.get("cust_col_invoice", tk.StringVar(value="Invoice")).get(),
-                booking=self._vars.get("cust_col_booking", tk.StringVar(value="Booking/HAWB")).get(),
-                container=self._vars.get("cust_col_container", tk.StringVar(value="Container")).get(),
+                invoice=self._vars.get(
+                    "cust_col_invoice", tk.StringVar(value="Invoice")
+                ).get(),
+                booking=self._vars.get(
+                    "cust_col_booking", tk.StringVar(value="Booking/HAWB")
+                ).get(),
+                container=self._vars.get(
+                    "cust_col_container", tk.StringVar(value="Container")
+                ).get(),
             ),
             customer_sheet_properties=CustomerSheetPropertiesConfig(
-                sheet_name=self._vars.get("cust_sheet_name", tk.StringVar(value="")).get(),
+                sheet_name=self._vars.get(
+                    "cust_sheet_name", tk.StringVar(value="")
+                ).get(),
             ),
             ebs=EbsConfig(
                 download_url=self._vars["ebs_download_url"].get(),
@@ -725,4 +856,3 @@ class SettingsWindow(ctk.CTkToplevel):
             messagebox.showerror(
                 t("settings.save_error_title"), f"Error saving settings:\n{exc}"
             )
-

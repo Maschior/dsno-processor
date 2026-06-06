@@ -68,14 +68,16 @@ class ImportWizard(ctk.CTkToplevel):
 
         ctk.CTkButton(
             row_frame,
-            text=t("btn.browse"), width=80,
+            text=t("btn.browse"),
+            width=80,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
             command=self._browse,
         ).grid(row=0, column=1)
 
         # ── Status label ──────────────────────────────────────────
         self._status_label = ctk.CTkLabel(
-            self, text="",
+            self,
+            text="",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             text_color="gray60",
         )
@@ -87,7 +89,8 @@ class ImportWizard(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            text=t("btn.cancel"), height=34,
+            text=t("btn.cancel"),
+            height=34,
             corner_radius=8,
             fg_color=("gray70", "gray30"),
             hover_color=("gray60", "gray40"),
@@ -97,7 +100,8 @@ class ImportWizard(ctk.CTkToplevel):
 
         self._import_btn = ctk.CTkButton(
             btn_frame,
-            text=t("import.btn_import"), height=34,
+            text=t("import.btn_import"),
+            height=34,
             corner_radius=8,
             fg_color=("#2e7d32", "#1b5e20"),
             hover_color=("#388e3c", "#2e7d32"),
@@ -123,7 +127,9 @@ class ImportWizard(ctk.CTkToplevel):
 
         self._import_btn.configure(state="disabled")
         self._status_label.configure(text=t("import.importing"), text_color="gray60")
-        threading.Thread(target=self._import_thread, args=(file_path,), daemon=True).start()
+        threading.Thread(
+            target=self._import_thread, args=(file_path,), daemon=True
+        ).start()
 
     def _import_thread(self, file_path: str) -> None:
         try:
@@ -138,7 +144,8 @@ class ImportWizard(ctk.CTkToplevel):
             init_db(conn)
 
             imported, skipped = db_import_customer_sheet(
-                conn, file_path,
+                conn,
+                file_path,
                 invoice_col=inv_col,
                 booking_col=bk_col,
                 container_col=cnt_col,
@@ -147,11 +154,15 @@ class ImportWizard(ctk.CTkToplevel):
             conn.close()
 
             msg = t("import.success", imported=imported, skipped=skipped)
-            self.after(0, lambda: self._status_label.configure(text=msg, text_color="#43a047"))
+            self.after(
+                0, lambda: self._status_label.configure(text=msg, text_color="#43a047")
+            )
             self.after(0, lambda: messagebox.showinfo(t("import.title"), msg))
         except Exception as exc:
             msg = t("import.error", error=str(exc))
-            self.after(0, lambda: self._status_label.configure(text=msg, text_color="#e53935"))
+            self.after(
+                0, lambda: self._status_label.configure(text=msg, text_color="#e53935")
+            )
             self.after(0, lambda: messagebox.showerror(t("import.title"), msg))
         finally:
             self.after(0, lambda: self._import_btn.configure(state="normal"))
@@ -182,17 +193,20 @@ class ImportControlWizard(ctk.CTkToplevel):
 
     def _build_ui(self) -> None:
         pad = 16
-        
+
         # ── Input row ─────────────────────────────────────────────
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.pack(fill="x", padx=pad, pady=(pad, 8))
 
         ctk.CTkLabel(
-            row, text=t("import_control.select_file"),
-            font=ctk.CTkFont(family=_FONT_FAMILY, size=12, weight="bold")
+            row,
+            text=t("import_control.select_file"),
+            font=ctk.CTkFont(family=_FONT_FAMILY, size=12, weight="bold"),
         ).pack(side="left", padx=(0, 8))
 
-        self._file_entry = ctk.CTkEntry(row, font=ctk.CTkFont(family=_FONT_FAMILY, size=12))
+        self._file_entry = ctk.CTkEntry(
+            row, font=ctk.CTkFont(family=_FONT_FAMILY, size=12)
+        )
         self._file_entry.pack(side="left", expand=True, fill="x", padx=(0, 8))
 
         # Default to configured path if exists
@@ -200,14 +214,17 @@ class ImportControlWizard(ctk.CTkToplevel):
             self._file_entry.insert(0, str(self._cfg.control_sheet))
 
         ctk.CTkButton(
-            row, text=t("import_control.btn_browse"), width=70,
+            row,
+            text=t("import_control.btn_browse"),
+            width=70,
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
-            command=self._browse
+            command=self._browse,
         ).pack(side="left")
 
         # ── Status label ──────────────────────────────────────────
         self._status_label = ctk.CTkLabel(
-            self, text="",
+            self,
+            text="",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
             text_color="gray60",
         )
@@ -219,7 +236,8 @@ class ImportControlWizard(ctk.CTkToplevel):
 
         ctk.CTkButton(
             btn_frame,
-            text=t("btn.cancel"), height=34,
+            text=t("btn.cancel"),
+            height=34,
             corner_radius=8,
             fg_color=("gray70", "gray30"),
             hover_color=("gray60", "gray40"),
@@ -229,7 +247,8 @@ class ImportControlWizard(ctk.CTkToplevel):
 
         self._import_btn = ctk.CTkButton(
             btn_frame,
-            text=t("import_control.btn_import"), height=34,
+            text=t("import_control.btn_import"),
+            height=34,
             corner_radius=8,
             fg_color=("#2e7d32", "#1b5e20"),
             hover_color=("#388e3c", "#2e7d32"),
@@ -250,12 +269,18 @@ class ImportControlWizard(ctk.CTkToplevel):
     def _start_import(self) -> None:
         file_path = self._file_entry.get().strip()
         if not file_path:
-            self._status_label.configure(text=t("import_control.no_file"), text_color="#e53935")
+            self._status_label.configure(
+                text=t("import_control.no_file"), text_color="#e53935"
+            )
             return
 
         self._import_btn.configure(state="disabled")
-        self._status_label.configure(text=t("import_control.importing"), text_color="gray60")
-        threading.Thread(target=self._import_thread, args=(file_path,), daemon=True).start()
+        self._status_label.configure(
+            text=t("import_control.importing"), text_color="gray60"
+        )
+        threading.Thread(
+            target=self._import_thread, args=(file_path,), daemon=True
+        ).start()
 
     def _import_thread(self, file_path: str) -> None:
         try:
@@ -269,14 +294,17 @@ class ImportControlWizard(ctk.CTkToplevel):
             description_col = cfg.DESCRIPTION_COL if cfg else None
 
             from dsno_processor.database import get_db_path, get_connection, init_db
-            from dsno_processor.database import import_control_sheet as db_import_control_sheet
+            from dsno_processor.database import (
+                import_control_sheet as db_import_control_sheet,
+            )
 
             db_path = get_db_path()
             conn = get_connection(db_path)
             init_db(conn)
 
             imported, skipped = db_import_control_sheet(
-                conn, file_path,
+                conn,
+                file_path,
                 invoice_col=inv_col,
                 dsno_col=dsno_col,
                 date_col=date_col,
@@ -288,11 +316,15 @@ class ImportControlWizard(ctk.CTkToplevel):
             conn.close()
 
             msg = t("import_control.success", imported=imported, skipped=skipped)
-            self.after(0, lambda: self._status_label.configure(text=msg, text_color="#43a047"))
+            self.after(
+                0, lambda: self._status_label.configure(text=msg, text_color="#43a047")
+            )
             self.after(0, lambda: messagebox.showinfo(t("import_control.title"), msg))
         except Exception as exc:
             msg = t("import_control.error", error=str(exc))
-            self.after(0, lambda: self._status_label.configure(text=msg, text_color="#e53935"))
+            self.after(
+                0, lambda: self._status_label.configure(text=msg, text_color="#e53935")
+            )
             self.after(0, lambda: messagebox.showerror(t("import_control.title"), msg))
         finally:
             self.after(0, lambda: self._import_btn.configure(state="normal"))

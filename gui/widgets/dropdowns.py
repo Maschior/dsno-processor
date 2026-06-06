@@ -12,7 +12,9 @@ from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
 class MultiSelectDropdown(ctk.CTkFrame):
     """A button that opens a popup with checkboxes for multi-select."""
 
-    def __init__(self, master, options: list[str], placeholder: str = "All", **kwargs) -> None:
+    def __init__(
+        self, master, options: list[str], placeholder: str = "All", **kwargs
+    ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
         self._options_list = options
         self._placeholder = placeholder
@@ -64,7 +66,8 @@ class MultiSelectDropdown(ctk.CTkFrame):
         border_color = "#444" if mode == "dark" else "#bbb"
 
         frame = tk.Frame(
-            popup, bg=bg,
+            popup,
+            bg=bg,
             relief="flat",
             bd=1,
             highlightthickness=1,
@@ -74,8 +77,13 @@ class MultiSelectDropdown(ctk.CTkFrame):
 
         if not self._options_list:
             tk.Label(
-                frame, text="No options available", bg=bg, fg="gray",
-                font=(_FONT_FAMILY, 10), padx=10, pady=6,
+                frame,
+                text="No options available",
+                bg=bg,
+                fg="gray",
+                font=(_FONT_FAMILY, 10),
+                padx=10,
+                pady=6,
             ).pack(fill="x")
         else:
             for opt in self._options_list:
@@ -84,14 +92,20 @@ class MultiSelectDropdown(ctk.CTkFrame):
                 row.pack(fill="x", padx=4, pady=1)
 
                 cb = tk.Checkbutton(
-                    row, text=opt, variable=var,
-                    bg=bg, fg=fg, selectcolor=check_bg,
-                    activebackground=hover_bg, activeforeground=fg,
+                    row,
+                    text=opt,
+                    variable=var,
+                    bg=bg,
+                    fg=fg,
+                    selectcolor=check_bg,
+                    activebackground=hover_bg,
+                    activeforeground=fg,
                     font=(_FONT_FAMILY, 11),
                     anchor="w",
                     relief="flat",
                     bd=0,
-                    padx=6, pady=4,
+                    padx=6,
+                    pady=4,
                     command=self._update_label,
                 )
                 cb.pack(fill="x")
@@ -105,9 +119,15 @@ class MultiSelectDropdown(ctk.CTkFrame):
 
             def _make_action_btn(parent, text, cmd, side="left"):
                 b = tk.Label(
-                    parent, text=text, bg=check_bg, fg=fg,
-                    font=(_FONT_FAMILY, 10), padx=8, pady=3,
-                    cursor="hand2", relief="flat",
+                    parent,
+                    text=text,
+                    bg=check_bg,
+                    fg=fg,
+                    font=(_FONT_FAMILY, 10),
+                    padx=8,
+                    pady=3,
+                    cursor="hand2",
+                    relief="flat",
                 )
                 b.pack(side=side, padx=2)
                 b.bind("<Button-1>", cmd)
@@ -170,4 +190,3 @@ class MultiSelectDropdown(ctk.CTkFrame):
     def reset(self) -> None:
         """Uncheck all options."""
         self._check_none()
-

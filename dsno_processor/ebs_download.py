@@ -115,9 +115,7 @@ def read_files_from_excel(
 
     headers = [cell.value for cell in ws[1]]
     if dsno_col not in headers:
-        raise ValueError(
-            f"Column '{dsno_col}' not found. Available columns: {headers}"
-        )
+        raise ValueError(f"Column '{dsno_col}' not found. Available columns: {headers}")
 
     dsno_col_idx = headers.index(dsno_col)
     date_col_idx = headers.index(date_col) if date_col in headers else None
@@ -135,7 +133,9 @@ def read_files_from_excel(
         date = row[date_col_idx]
 
         if status_col_idx is not None:
-            status = str(row[status_col_idx]) if row[status_col_idx] is not None else None
+            status = (
+                str(row[status_col_idx]) if row[status_col_idx] is not None else None
+            )
         else:
             status = None
 
@@ -158,7 +158,10 @@ def read_files_from_excel(
 
         # Apply status filter
         if status_filter:
-            if status is None or status.lower().strip() != status_filter.lower().strip():
+            if (
+                status is None
+                or status.lower().strip() != status_filter.lower().strip()
+            ):
                 continue
 
         files.append(str(value).strip())
@@ -197,10 +200,13 @@ def start_browser(download_dir: str, headless: bool = False) -> webdriver.Chrome
         logger.info("Headless mode enabled — browser running in background.")
 
     driver = webdriver.Chrome(options=options)
-    driver.execute_cdp_cmd("Page.setDownloadBehavior", {
-        "behavior": "allow",
-        "downloadPath": download_dir,
-    })
+    driver.execute_cdp_cmd(
+        "Page.setDownloadBehavior",
+        {
+            "behavior": "allow",
+            "downloadPath": download_dir,
+        },
+    )
 
     return driver
 
@@ -221,13 +227,14 @@ def _stoppable_sleep(seconds: float, cancel_event) -> None:
             raise CanceledError("Cancelled by user")
         time.sleep(0.1)
 
+
 def perform_microsoft_login(
     driver: webdriver.Chrome,
     wait: WebDriverWait,
     email: str,
     password: str,
     target_url: str = "",
-    cancel_event = None,
+    cancel_event=None,
 ) -> None:
     """Automate Microsoft SSO login: click sign-in, enter email, enter password."""
     logger.info("Starting automatic Microsoft login...")
@@ -246,10 +253,15 @@ def perform_microsoft_login(
     except CanceledError:
         raise
     except Exception:
-        logger.info("Sign-in button not found — possibly already on login page or page down.")
+        logger.info(
+            "Sign-in button not found — possibly already on login page or page down."
+        )
 
     # Check if page is down
-    if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
+    if (
+        "err_connection" in driver.page_source.lower()
+        or "this site can't be reached" in driver.page_source.lower()
+    ):
         raise Exception("Login screen or EBS appears to be down (connection error).")
 
     if cancel_event and cancel_event.is_set():
@@ -257,9 +269,7 @@ def perform_microsoft_login(
 
     # Step 2: Enter email
     try:
-        email_input = wait.until(
-            EC.element_to_be_clickable((By.ID, "i0116"))
-        )
+        email_input = wait.until(EC.element_to_be_clickable((By.ID, "i0116")))
         email_input.clear()
         email_input.send_keys(email)
         logger.info("Email entered.")
@@ -270,39 +280,42 @@ def perform_microsoft_login(
         raise
     except Exception as e:
         logger.warning("Error entering email, or login screen not available: %s", e)
-        raise Exception("Failed to find or interact with Email input. Is the login screen loaded?")
+        raise Exception(
+            "Failed to find or interact with Email input. Is the login screen loaded?"
+        )
 
     if cancel_event and cancel_event.is_set():
         raise CanceledError("Cancelled by user")
 
     # Step 3: Enter password
     try:
-        password_input = wait.until(
-            EC.element_to_be_clickable((By.ID, "i0118"))
-        )
+        password_input = wait.until(EC.element_to_be_clickable((By.ID, "i0118")))
         password_input.clear()
         password_input.send_keys(password)
         logger.info("Password entered.")
         _stoppable_sleep(1, cancel_event)
         password_input.send_keys(Keys.RETURN)
-        
+
         # Check for incorrect password
         for _ in range(10):
             if cancel_event and cancel_event.is_set():
                 raise CanceledError("Cancelled by user")
-            
+
             # Use find_elements to avoid NoSuchElementException if not found
             err_elements = driver.find_elements(By.ID, "passwordError")
             if err_elements and err_elements[0].is_displayed():
                 err_msg = err_elements[0].text
                 raise LoginError(f"Login failed: {err_msg}")
-            
+
             # If we see signs of redirecting, we can break early
-            if "kmsi" in driver.current_url.lower() or "ebs" in driver.current_url.lower():
+            if (
+                "kmsi" in driver.current_url.lower()
+                or "ebs" in driver.current_url.lower()
+            ):
                 break
 
             _stoppable_sleep(0.5, cancel_event)
-    
+
     except LoginError as e:
         logger.error(f"Login failed: {str(e)}")
         raise
@@ -341,7 +354,10 @@ def perform_microsoft_login(
         driver.get(target_url)
         _stoppable_sleep(5, cancel_event)
         # Final check if EBS is down after redirect
-        if "err_connection" in driver.page_source.lower() or "this site can't be reached" in driver.page_source.lower():
+        if (
+            "err_connection" in driver.page_source.lower()
+            or "this site can't be reached" in driver.page_source.lower()
+        ):
             raise Exception("EBS appears to be down (connection error) after login.")
 
     logger.info("Automatic login complete.")
@@ -384,18 +400,20 @@ def _file_found(driver):
         return False
 
 
-def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir: str) -> bool:
+def _download_via_requests(
+    driver: webdriver.Chrome, filename: str, download_dir: str
+) -> bool:
     """Download the file using requests by reusing Selenium's cookies and form state."""
     try:
         session = requests.Session()
         # 1. Transfer cookies
         for cookie in driver.get_cookies():
-            session.cookies.set(cookie['name'], cookie['value'])
-            
+            session.cookies.set(cookie["name"], cookie["value"])
+
         # 2. Transfer User-Agent to look like the same browser
         user_agent = driver.execute_script("return navigator.userAgent")
         session.headers.update({"User-Agent": user_agent})
-        
+
         # 3. Extract form data from the current page using JavaScript
         # This is atomic on the browser side and avoids StaleElementReferenceException
         # that often happens when scraping dynamic Oracle EBS forms manually.
@@ -411,57 +429,61 @@ def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir
             }
             return data;
         """)
-        
+
         if not data:
             logger.warning("     Form 'DefaultFormName' not found on current page.")
             return False
-                
+
         # 5. Inject/Override parameters for the Download event
         # This simulates the JS call: submitForm('DefaultFormName',1,{event:'Download',source:'Download'});
-        data['event'] = 'Download'
-        data['source'] = 'Download'
+        data["event"] = "Download"
+        data["source"] = "Download"
         # Ensure the filename is correct even if Selenium send_keys just happened
-        data['FileName'] = filename
-        
+        data["FileName"] = filename
+
         url = driver.current_url
         logger.info("     Initiating POST request via requests session...")
-        
+
         response = session.post(url, data=data, stream=True, timeout=60)
-        
+
         # 6. Validate response
         content_type = response.headers.get("Content-Type", "").lower()
         if "text/html" in content_type:
             # Check if it's a small error page
             if len(response.content) < 5000:
-                logger.warning("     Server returned HTML instead of a file. Likely an error.")
+                logger.warning(
+                    "     Server returned HTML instead of a file. Likely an error."
+                )
                 return False
-        
+
         # If we got here, we likely have the file or a very large HTML (unlikely)
         # Check Content-Disposition for filename or just save it
         disp = response.headers.get("Content-Disposition", "")
         save_name = filename
         if "filename=" in disp:
             save_name = disp.split("filename=")[-1].strip('"').strip("'")
-            
+
         # Ensure it starts with DSNO if that's the rule
         if not save_name.upper().startswith("DSNO") and "text/html" in content_type:
-             logger.warning("     Incorrect file type detected in requests response.")
-             return False
+            logger.warning("     Incorrect file type detected in requests response.")
+            return False
 
         file_path = os.path.join(download_dir, save_name)
         with open(file_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
-        
+
         # Post-download verification
         if os.path.getsize(file_path) == 0:
-            logger.warning("     Downloaded file is empty (0 bytes). Deleting: %s", save_name)
+            logger.warning(
+                "     Downloaded file is empty (0 bytes). Deleting: %s", save_name
+            )
             os.remove(file_path)
             return False
 
         logger.info("     Download successful via requests: %s", save_name)
         return True
-        
+
     except CanceledError:
         raise
     except Exception as e:
@@ -469,11 +491,13 @@ def _download_via_requests(driver: webdriver.Chrome, filename: str, download_dir
         return False
 
 
-def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_event=None):
+def _attempt_download(
+    driver, wait, filename, config: DownloadConfig, cancel_event=None
+):
     """Try to download a file from the current folder."""
     try:
-        # Wrap the primary input interaction in a retry loop to handle 
-        # StaleElementReferenceException, which often happens in EBS 
+        # Wrap the primary input interaction in a retry loop to handle
+        # StaleElementReferenceException, which often happens in EBS
         # when the page is still "settling" after a folder selection.
         field = None
         for attempt in range(3):
@@ -491,9 +515,9 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
                     raise
                 _stoppable_sleep(1, cancel_event)
                 continue
-        
+
         _stoppable_sleep(5, cancel_event)
-        
+
         # TAB might also need protection
         for attempt in range(3):
             if cancel_event and cancel_event.is_set():
@@ -507,9 +531,8 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
                     raise
                 _stoppable_sleep(1, cancel_event)
                 continue
-                
-        _stoppable_sleep(2, cancel_event)
 
+        _stoppable_sleep(2, cancel_event)
 
         # 1. Check for EBS LOV/Popup (indicates file not found uniquely)
         popup_identifiers = [
@@ -523,14 +546,18 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
             try:
                 els = driver.find_elements(by, sel)
                 if els and any(e.is_displayed() for e in els):
-                    logger.info("EBS Popup/Dialog detected — file not found in this folder.")
+                    logger.info(
+                        "EBS Popup/Dialog detected — file not found in this folder."
+                    )
                     try:
-                        driver.execute_script("document.getElementById('closeAnchorlovPopUp_FileName')?.click();")
+                        driver.execute_script(
+                            "document.getElementById('closeAnchorlovPopUp_FileName')?.click();"
+                        )
                     except Exception:
                         logger.debug("Unable to close EBS popup", exc_info=True)
                     return False
             except Exception as e:
-                # If element becomes stale during checking, it likely means the page 
+                # If element becomes stale during checking, it likely means the page
                 # is refreshing/changing, which is fine to ignore in this detection loop.
                 if "stale" in str(e).lower():
                     continue
@@ -539,7 +566,7 @@ def _attempt_download(driver, wait, filename, config: DownloadConfig, cancel_eve
         # 3. Use requests to download (reusing cookies and form state)
         if _download_via_requests(driver, filename, config.download_dir):
             return True
-        
+
         return False
 
     except CanceledError:
@@ -568,7 +595,9 @@ def download_file(
             return False
         logger.info(
             "Trying folder %d/%d (index %d)...",
-            i, len(config.folder_indices), index,
+            i,
+            len(config.folder_indices),
+            index,
         )
         try:
             _select_folder(driver, wait, index, cancel_event)
@@ -596,7 +625,9 @@ def download_file(
 # ── Orchestrator ─────────────────────────────────────────────────────
 
 
-def run_download(config: DownloadConfig, progress_callback=None, cancel_event=None) -> dict:
+def run_download(
+    config: DownloadConfig, progress_callback=None, cancel_event=None
+) -> dict:
     """Run the full download flow.
 
     Args:
@@ -615,7 +646,9 @@ def run_download(config: DownloadConfig, progress_callback=None, cancel_event=No
     # 1. Load history
     _cb("phase", {"text": "Loading history..."})
     history = load_history(config.download_dir)
-    already_done = [k for k, v in history.items() if v["status"] in ("success", "sucesso")]
+    already_done = [
+        k for k, v in history.items() if v["status"] in ("success", "sucesso")
+    ]
     if already_done:
         logger.info("History: %d file(s) already downloaded.", len(already_done))
 
@@ -667,7 +700,14 @@ def run_download(config: DownloadConfig, progress_callback=None, cancel_event=No
         open_url(driver, config.ebs_url)
         if config.email and config.password:
             _cb("phase", {"text": "Performing automatic login..."})
-            perform_microsoft_login(driver, wait, config.email, config.password, config.ebs_url, cancel_event)
+            perform_microsoft_login(
+                driver,
+                wait,
+                config.email,
+                config.password,
+                config.ebs_url,
+                cancel_event,
+            )
 
         folders = list_folders(driver, wait)
         for f in folders:
@@ -710,7 +750,7 @@ def run_download(config: DownloadConfig, progress_callback=None, cancel_event=No
             for f in failure_list:
                 logger.info("    - %s", f)
         logger.info("  Downloads: %s", config.download_dir)
-    
+
     except LoginError as e:
         _cb("error", {"name": "Login", "detail": str(e)})
         raise
@@ -727,4 +767,8 @@ def run_download(config: DownloadConfig, progress_callback=None, cancel_event=No
         except Exception:
             logger.debug("Unable to close browser driver cleanly", exc_info=True)
 
-    return {"success": success_count, "skipped": skipped_count, "failures": failure_list}
+    return {
+        "success": success_count,
+        "skipped": skipped_count,
+        "failures": failure_list,
+    }

@@ -48,7 +48,7 @@ class TestReadCustomerSheet:
         with patch("dsno_processor.customer_reader.cfg") as mock_cfg:
             mock_cfg.CUSTOMER_SHEET_NAME = ""
             result = read_customer_sheet(path)
-        
+
         assert "INVOICE" in result.columns
         assert "BOOKING" in result.columns
 
@@ -105,10 +105,12 @@ class TestGetDsnoInfo:
 
     def test_container_optional(self):
         """If CONTAINER column is missing, container should be empty string."""
-        df = pd.DataFrame({
-            "INVOICE": [100001],
-            "BOOKING/HAWB": ["BK-001"],
-        })
+        df = pd.DataFrame(
+            {
+                "INVOICE": [100001],
+                "BOOKING/HAWB": ["BK-001"],
+            }
+        )
         with _patch_customer_constants():
             from dsno_processor.customer_reader import get_dsno_info
 
@@ -117,11 +119,13 @@ class TestGetDsnoInfo:
             assert info.container == ""
 
     def test_returns_first_match_on_duplicates(self):
-        df = pd.DataFrame({
-            "INVOICE": [100001, 100001],
-            "BOOKING/HAWB": ["BK-FIRST", "BK-SECOND"],
-            "CONTAINER": ["CNT-1", "CNT-2"],
-        })
+        df = pd.DataFrame(
+            {
+                "INVOICE": [100001, 100001],
+                "BOOKING/HAWB": ["BK-FIRST", "BK-SECOND"],
+                "CONTAINER": ["CNT-1", "CNT-2"],
+            }
+        )
         with _patch_customer_constants():
             from dsno_processor.customer_reader import get_dsno_info
 

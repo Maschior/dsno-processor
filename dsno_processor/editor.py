@@ -113,21 +113,33 @@ _REGEX_1010 = "                                                        1010"
 
 def edit_waybill_number(filepath: Path, value: str) -> bool:
     return edit_field(
-        filepath, _REGEX_1000, 206, 235, value,
+        filepath,
+        _REGEX_1000,
+        206,
+        235,
+        value,
         success_message=f"BOOKING inserted: {value}",
     )
 
 
 def edit_bill_of_lading(filepath: Path, value: str) -> bool:
     return edit_field(
-        filepath, _REGEX_1000, 236, 265, value,
+        filepath,
+        _REGEX_1000,
+        236,
+        265,
+        value,
         success_message=f"INVOICE inserted: {value}",
     )
 
 
 def edit_equip_number(filepath: Path, value: str) -> bool:
     return edit_field(
-        filepath, _REGEX_1010, 111, 130, value,
+        filepath,
+        _REGEX_1010,
+        111,
+        130,
+        value,
         success_message=f"CONTAINER inserted: {value}",
     )
 
@@ -192,6 +204,7 @@ def move_to_processed(filepath: Path, processed_dir: Path) -> bool:
     except OSError as exc:
         log.error("Failed to move DSNO file %s: %s", filepath.name, exc)
         return False
+
 
 def get_size(filepath: Path) -> int:
     """Get the size of the file in bytes."""

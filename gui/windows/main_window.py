@@ -29,7 +29,9 @@ from gui.widgets.dashboard import (
 log = logging.getLogger(__name__)
 
 
-class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMixin, ctk.CTk):
+class DSNOApp(
+    AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMixin, ctk.CTk
+):
     """Main application window."""
 
     def __init__(self) -> None:
@@ -48,23 +50,23 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         if cfg:
             set_language(cfg.language)
 
-        self._TAB_PROC     = t("tab.processor")
+        self._TAB_PROC = t("tab.processor")
         self._TAB_DOWNLOAD = t("tab.download")
-        self._TAB_UPLOAD   = t("tab.upload")
+        self._TAB_UPLOAD = t("tab.upload")
 
         self.title(t("app.title"))
-        
+
         # Center the window on the screen
         width, height = 1270, 720
         x = (self.winfo_screenwidth() // 2) - (width // 2)
         y = (self.winfo_screenheight() // 2) - (height // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
-        
+
         self.minsize(640, 480)
 
         default_customer = str(cfg.customer_sheet) if cfg else ""
-        default_control  = str(cfg.control_sheet)  if cfg else ""
-        default_dsno_dir = str(cfg.dsno_directory)  if cfg else ""
+        default_control = str(cfg.control_sheet) if cfg else ""
+        default_dsno_dir = str(cfg.dsno_directory) if cfg else ""
         self._customer_pre_path = str(cfg.customer_sheet_pre_path) if cfg else ""
 
         self._dl_handler = None
@@ -76,11 +78,11 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
 
         # ── Build UI ─────────────────────────────────────────────
         self._create_widgets(default_customer, default_control, default_dsno_dir)
-        
+
         # Initialize blocking overlay
         h_imgs = getattr(self.dashboard, "_hourglass_imgs", [])
         self.blocking_overlay = BlockingOverlay(self, h_imgs)
-        
+
         self._setup_logging()
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
@@ -95,7 +97,9 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         except Exception:
             log.exception("Failed to load application icon from %s", icon_path)
 
-    def _run_on_ui_thread(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+    def _run_on_ui_thread(
+        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> None:
         """Schedule UI work safely from worker threads."""
         if threading.current_thread() is self._main_thread:
             func(*args, **kwargs)
@@ -105,7 +109,11 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
 
     def _on_closing(self) -> None:
         """Handle window close event to ensure background threads can clean up."""
-        for ev_attr in ["_processor_cancel_event", "_dl_cancel_event", "_ul_cancel_event"]:
+        for ev_attr in [
+            "_processor_cancel_event",
+            "_dl_cancel_event",
+            "_ul_cancel_event",
+        ]:
             if hasattr(self, ev_attr):
                 ev = getattr(self, ev_attr)
                 if ev:
@@ -121,7 +129,7 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         if self.log_handler not in root_logger.handlers:
             root_logger.addHandler(self.log_handler)
         root_logger.setLevel(logging.INFO)
-        
+
     def _show_log_window(self) -> None:
         self.log_window.show()
 
@@ -141,7 +149,7 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
     def _hide_blocking_overlay(self) -> None:
         self.blocking_overlay.stop_animation()
         self.blocking_overlay.place_forget()
-    
+
     def _create_widgets(
         self,
         default_customer: str,
@@ -149,7 +157,7 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         default_dsno_dir: str,
     ) -> None:
         pad = 16
-        
+
         # Frame do rodapé
         footer_frame = ctk.CTkFrame(self, fg_color="transparent", height=30)
         footer_frame.pack(side="bottom", fill="x", padx=pad, pady=(0, 8))
@@ -158,7 +166,7 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         log_icon = ctk.CTkImage(
             light_image=Image.open(get_asset_path("assets/icons/bug_light.png")),
             dark_image=Image.open(get_asset_path("assets/icons/bug_dark.png")),
-            size=(15, 15)
+            size=(15, 15),
         )
 
         ctk.CTkButton(
@@ -186,7 +194,7 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
 
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
         header_inner.pack(fill="x", padx=12, pady=(10, 0))
-        
+
         # 1. Text Container - Perfectly Centered
         # We use a subframe that we will pack with expand=True to center it
         text_container = ctk.CTkFrame(header_inner, fg_color="transparent")
@@ -211,7 +219,7 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
             logo_img = ctk.CTkImage(
                 light_image=Image.open(get_asset_path("assets/icons/swap_light.png")),
                 dark_image=Image.open(get_asset_path("assets/icons/swap_dark.png")),
-                size=(28, 28)
+                size=(28, 28),
             )
             logo_label = ctk.CTkLabel(text_container, image=logo_img, text="")
             # Place it to the left of the title_label using relative coordinates
@@ -227,9 +235,11 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         ctk.CTkButton(
             header_btns,
             image=ctk.CTkImage(
-                light_image=Image.open(get_asset_path("assets/icons/settings_light.png")),
+                light_image=Image.open(
+                    get_asset_path("assets/icons/settings_light.png")
+                ),
                 dark_image=Image.open(get_asset_path("assets/icons/settings_dark.png")),
-                size=(18, 18)
+                size=(18, 18),
             ),
             text="",
             width=30,
@@ -242,9 +252,11 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         self._lang_btn = ctk.CTkButton(
             header_btns,
             image=ctk.CTkImage(
-                light_image=Image.open(get_asset_path("assets/icons/language_light.png")),
+                light_image=Image.open(
+                    get_asset_path("assets/icons/language_light.png")
+                ),
                 dark_image=Image.open(get_asset_path("assets/icons/language_dark.png")),
-                size=(18, 18)
+                size=(18, 18),
             ),
             text="",
             width=30,
@@ -259,9 +271,11 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         ctk.CTkButton(
             header_btns,
             image=ctk.CTkImage(
-                light_image=Image.open(get_asset_path("assets/icons/refresh_light.png")),
+                light_image=Image.open(
+                    get_asset_path("assets/icons/refresh_light.png")
+                ),
                 dark_image=Image.open(get_asset_path("assets/icons/refresh_dark.png")),
-                size=(18, 18)
+                size=(18, 18),
             ),
             text="",
             width=30,
@@ -287,7 +301,6 @@ class DSNOApp(AppActionsMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMix
         self._build_tab_processor(default_customer, default_control, default_dsno_dir)
         self._build_tab_download()
         self._build_tab_upload()
-
 
 
 def start_gui() -> None:

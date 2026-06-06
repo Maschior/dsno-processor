@@ -76,7 +76,9 @@ class _CalendarPopup(ctk.CTkToplevel):
 
         # ── Time section (only when show_time) ────────────────────
         if show_time:
-            time_frame = ctk.CTkFrame(outer, fg_color=("gray85", "gray17"), corner_radius=8)
+            time_frame = ctk.CTkFrame(
+                outer, fg_color=("gray85", "gray17"), corner_radius=8
+            )
             time_frame.pack(fill="x", padx=8, pady=(4, 6))
 
             ctk.CTkLabel(
@@ -96,21 +98,41 @@ class _CalendarPopup(ctk.CTkToplevel):
             def _spinner(parent, label, var, delta_fn):
                 col = ctk.CTkFrame(parent, fg_color="transparent")
                 col.pack(side="left", padx=6)
-                ctk.CTkLabel(col, text=label,
+                ctk.CTkLabel(
+                    col,
+                    text=label,
                     font=ctk.CTkFont(family=_FONT_FAMILY, size=10),
                     text_color=("gray50", "gray60"),
                 ).pack()
-                ctk.CTkButton(col, text="▲", width=34, height=22, corner_radius=4,
-                    fg_color=("gray75", "gray25"), hover_color=("gray65", "gray35"),
-                    font=ctk.CTkFont(size=11), command=lambda: delta_fn(1),
+                ctk.CTkButton(
+                    col,
+                    text="▲",
+                    width=34,
+                    height=22,
+                    corner_radius=4,
+                    fg_color=("gray75", "gray25"),
+                    hover_color=("gray65", "gray35"),
+                    font=ctk.CTkFont(size=11),
+                    command=lambda: delta_fn(1),
                 ).pack()
-                ctk.CTkEntry(col, textvariable=var, width=38, height=28,
+                ctk.CTkEntry(
+                    col,
+                    textvariable=var,
+                    width=38,
+                    height=28,
                     justify="center",
                     font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
                 ).pack(pady=2)
-                ctk.CTkButton(col, text="▼", width=34, height=22, corner_radius=4,
-                    fg_color=("gray75", "gray25"), hover_color=("gray65", "gray35"),
-                    font=ctk.CTkFont(size=11), command=lambda: delta_fn(-1),
+                ctk.CTkButton(
+                    col,
+                    text="▼",
+                    width=34,
+                    height=22,
+                    corner_radius=4,
+                    fg_color=("gray75", "gray25"),
+                    hover_color=("gray65", "gray35"),
+                    font=ctk.CTkFont(size=11),
+                    command=lambda: delta_fn(-1),
                 ).pack()
 
             def _upd_h(d):
@@ -126,11 +148,19 @@ class _CalendarPopup(ctk.CTkToplevel):
                 self._s_var.set(f"{self._second:02d}")
 
             _spinner(spinners, "HH", self._h_var, _upd_h)
-            ctk.CTkLabel(spinners, text=":", font=ctk.CTkFont(size=18, weight="bold"),
-                text_color=("gray50", "gray60")).pack(side="left", pady=(14, 0))
+            ctk.CTkLabel(
+                spinners,
+                text=":",
+                font=ctk.CTkFont(size=18, weight="bold"),
+                text_color=("gray50", "gray60"),
+            ).pack(side="left", pady=(14, 0))
             _spinner(spinners, "MM", self._m_var, _upd_m)
-            ctk.CTkLabel(spinners, text=":", font=ctk.CTkFont(size=18, weight="bold"),
-                text_color=("gray50", "gray60")).pack(side="left", pady=(14, 0))
+            ctk.CTkLabel(
+                spinners,
+                text=":",
+                font=ctk.CTkFont(size=18, weight="bold"),
+                text_color=("gray50", "gray60"),
+            ).pack(side="left", pady=(14, 0))
             _spinner(spinners, "SS", self._s_var, _upd_s)
 
             # Sync manual typing
@@ -139,19 +169,37 @@ class _CalendarPopup(ctk.CTkToplevel):
                     setattr(self, attr, max(lo, min(hi, int(var.get()))))
                 except ValueError:
                     pass
-            self._h_var.trace_add("write", lambda *_: _sync(self._h_var, 0, 23, "_hour"))
-            self._m_var.trace_add("write", lambda *_: _sync(self._m_var, 0, 59, "_minute"))
-            self._s_var.trace_add("write", lambda *_: _sync(self._s_var, 0, 59, "_second"))
+
+            self._h_var.trace_add(
+                "write", lambda *_: _sync(self._h_var, 0, 23, "_hour")
+            )
+            self._m_var.trace_add(
+                "write", lambda *_: _sync(self._m_var, 0, 59, "_minute")
+            )
+            self._s_var.trace_add(
+                "write", lambda *_: _sync(self._s_var, 0, 59, "_second")
+            )
 
             # Apply / Cancel buttons
             btn_row = ctk.CTkFrame(outer, fg_color="transparent")
             btn_row.pack(fill="x", padx=8, pady=(0, 8))
-            ctk.CTkButton(btn_row, text=t("btn.cancel"), width=90, height=30, corner_radius=6,
-                fg_color=("gray70", "gray30"), hover_color=("gray60", "gray40"),
+            ctk.CTkButton(
+                btn_row,
+                text=t("btn.cancel"),
+                width=90,
+                height=30,
+                corner_radius=6,
+                fg_color=("gray70", "gray30"),
+                hover_color=("gray60", "gray40"),
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=12),
                 command=self.destroy,
             ).pack(side="left", expand=True, padx=(0, 4))
-            ctk.CTkButton(btn_row, text="✔  Apply", width=90, height=30, corner_radius=6,
+            ctk.CTkButton(
+                btn_row,
+                text="✔  Apply",
+                width=90,
+                height=30,
+                corner_radius=6,
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=12, weight="bold"),
                 command=self._apply,
             ).pack(side="left", expand=True, padx=(4, 0))
@@ -169,9 +217,7 @@ class _CalendarPopup(ctk.CTkToplevel):
     def destroy(self) -> None:
         if not self._show_time:
             try:
-                self._master_input.winfo_toplevel().unbind(
-                    "<Button-1>", self._click_id
-                )
+                self._master_input.winfo_toplevel().unbind("<Button-1>", self._click_id)
             except Exception:
                 pass
         self._master_input._popup = None
@@ -198,17 +244,32 @@ class _CalendarPopup(ctk.CTkToplevel):
         # Navigation row
         nav = ctk.CTkFrame(self._cal_frame, fg_color="transparent")
         nav.pack(fill="x")
-        ctk.CTkButton(nav, text="◀", width=28, height=26, corner_radius=5,
-            fg_color="transparent", hover_color=("gray70", "gray30"),
-            command=self._prev_month, font=ctk.CTkFont(size=12),
+        ctk.CTkButton(
+            nav,
+            text="◀",
+            width=28,
+            height=26,
+            corner_radius=5,
+            fg_color="transparent",
+            hover_color=("gray70", "gray30"),
+            command=self._prev_month,
+            font=ctk.CTkFont(size=12),
         ).pack(side="left")
-        ctk.CTkLabel(nav,
+        ctk.CTkLabel(
+            nav,
             text=f"{calendar.month_name[self._month]}  {self._year}",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=13, weight="bold"),
         ).pack(side="left", expand=True)
-        ctk.CTkButton(nav, text="▶", width=28, height=26, corner_radius=5,
-            fg_color="transparent", hover_color=("gray70", "gray30"),
-            command=self._next_month, font=ctk.CTkFont(size=12),
+        ctk.CTkButton(
+            nav,
+            text="▶",
+            width=28,
+            height=26,
+            corner_radius=5,
+            fg_color="transparent",
+            hover_color=("gray70", "gray30"),
+            command=self._next_month,
+            font=ctk.CTkFont(size=12),
         ).pack(side="right")
 
         # Day grid
@@ -217,7 +278,10 @@ class _CalendarPopup(ctk.CTkToplevel):
         for col in range(7):
             grid.columnconfigure(col, minsize=cell)
         for col, d in enumerate(self._DAYS):
-            ctk.CTkLabel(grid, text=d, width=cell,
+            ctk.CTkLabel(
+                grid,
+                text=d,
+                width=cell,
                 font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
                 text_color="gray55",
             ).grid(row=0, column=col, padx=1, pady=(0, 2))
@@ -239,21 +303,37 @@ class _CalendarPopup(ctk.CTkToplevel):
                         and self._month == today.month
                         and self._year == today.year
                     )
-                    bg = ("#1f6aa5", "#1f6aa5") if selected else (
-                        ("gray80", "gray25") if is_today else "transparent"
+                    bg = (
+                        ("#1f6aa5", "#1f6aa5")
+                        if selected
+                        else (("gray80", "gray25") if is_today else "transparent")
                     )
-                    tc = "white" if selected else (
-                        ("#1f6aa5", "#4ba3e3") if is_today else None
+                    tc = (
+                        "white"
+                        if selected
+                        else (("#1f6aa5", "#4ba3e3") if is_today else None)
                     )
-                    hover = ("#2979b5", "#2979b5") if selected else (
-                        ("gray70", "gray35") if is_today else ("gray75", "gray30")
+                    hover = (
+                        ("#2979b5", "#2979b5")
+                        if selected
+                        else (
+                            ("gray70", "gray35") if is_today else ("gray75", "gray30")
+                        )
                     )
                     ctk.CTkButton(
-                        grid, text=str(day), width=cell, height=30,
+                        grid,
+                        text=str(day),
+                        width=cell,
+                        height=30,
                         corner_radius=6,
-                        font=ctk.CTkFont(family=_FONT_FAMILY, size=12,
-                                         weight="bold" if is_today else "normal"),
-                        fg_color=bg, hover_color=hover, text_color=tc,
+                        font=ctk.CTkFont(
+                            family=_FONT_FAMILY,
+                            size=12,
+                            weight="bold" if is_today else "normal",
+                        ),
+                        fg_color=bg,
+                        hover_color=hover,
+                        text_color=tc,
                         command=lambda d=day: self._pick_day(d),
                     ).grid(row=row_i, column=col, padx=1, pady=1)
 
@@ -285,8 +365,12 @@ class _CalendarPopup(ctk.CTkToplevel):
         """Called only in show_time mode via the Apply button."""
         day = self._selected_day if self._selected_day is not None else 1
         self._master_input._set_datetime(
-            day, self._month, self._year,
-            self._hour, self._minute, self._second,
+            day,
+            self._month,
+            self._year,
+            self._hour,
+            self._minute,
+            self._second,
         )
         self.destroy()
 
@@ -421,7 +505,9 @@ class DateInput(ctk.CTkFrame):
                 pass
 
         self._popup = _CalendarPopup(
-            self, now.year, now.month,
+            self,
+            now.year,
+            now.month,
             show_time=self._show_time,
             initial_day=day,
             initial_hour=h,
@@ -522,5 +608,3 @@ class FilePickerRow(ctk.CTkFrame):
     def _handle_change(self) -> None:
         if self.on_change:
             self.on_change()
-
-

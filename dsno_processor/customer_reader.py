@@ -7,9 +7,7 @@ Provides functions to:
 
 from __future__ import annotations
 
-import json
 import logging
-import time
 from pathlib import Path
 
 import pandas as pd
@@ -34,60 +32,6 @@ _INVOICE_COL = cfg.INVOICE_COL.upper()
 _CONTAINER_COL = cfg.CONTAINER_COL.upper()
 _BOOKING_COL = cfg.BOOKING_COL.upper()
 _REQUIRED_COLUMNS = {_INVOICE_COL, _BOOKING_COL}
-
-# region agent log helpers (debug-1ca7c5)
-_DEBUG_LOG_PATH = "debug-1ca7c5.log"
-_DEBUG_SESSION_ID = "1ca7c5"
-
-
-def _append_debug_log(
-    *, runId: str, hypothesisId: str, location: str, message: str, data: dict
-) -> None:
-    try:
-        payload = {
-            "sessionId": _DEBUG_SESSION_ID,
-            "runId": runId,
-            "hypothesisId": hypothesisId,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        return
-
-
-def _suspicious_chars(s: str) -> list[str]:
-    out: list[str] = []
-    for ch in s:
-        o = ord(ch)
-        if o > 127:
-            out.append(f"U+{o:04X}")
-    return out
-
-
-def _col_signature(cols: list[object], *, limit: int = 80) -> list[dict]:
-    sig: list[dict] = []
-    for c in cols[:limit]:
-        s = str(c)
-        sig.append(
-            {
-                "text": s[:200],
-                "repr": repr(s)[:220],
-                "len": len(s),
-                "suspicious": _suspicious_chars(s)[:20],
-                "has_nbsp": ("\u00A0" in s),
-                "has_slash": ("/" in s),
-                "has_backslash": ("\\" in s),
-            }
-        )
-    return sig
-
-
-# endregion
-
 
 # ── Sheet loading ────────────────────────────────────────────────────
 
@@ -120,20 +64,6 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
     except Exception:
         sheet_names = []
 
-    _append_debug_log(
-        runId="pre-fix",
-        hypothesisId="H4",
-        location="dsno_processor/customer_reader.py:read_customer_sheet(sheet-list)",
-        message="Customer workbook sheet names discovered",
-        data={
-            "path_name": path.name,
-            "cfg_sheet_name": sheet_name or "",
-            "sheet_count": int(len(sheet_names)),
-            "sheet_names": sheet_names[:50],
-            "required": sorted(required),
-        },
-    )
-
     def _normalize_cols(cols: pd.Index) -> pd.Index:
         return (
             cols.astype(str)
@@ -161,49 +91,14 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
                 candidate = _read_one(name)
                 cand_cols = _normalize_cols(candidate.columns)
                 miss = required - set(cand_cols)
-                _append_debug_log(
-                    runId="pre-fix",
-                    hypothesisId="H4",
-                    location="dsno_processor/customer_reader.py:read_customer_sheet(scan)",
-                    message="Scanning sheet for required columns",
-                    data={
-                        "sheet_name": str(name),
-                        "nrows": int(getattr(candidate, "shape", (0, 0))[0]),
-                        "ncols": int(getattr(candidate, "shape", (0, 0))[1]),
-                        "missing_required": sorted(miss),
-                    },
-                )
                 if not miss:
                     df = candidate
                     sheet_name = str(name)
                     break
 
-    _append_debug_log(
-        runId="pre-fix",
-        hypothesisId="H1",
-        location="dsno_processor/customer_reader.py:read_customer_sheet(raw)",
-        message="Customer sheet loaded (raw headers)",
-        data={
-            "path_name": path.name,
-            "sheet_name": sheet_name or "",
-            "ncols": int(len(df.columns)),
-            "columns_sig": _col_signature(list(df.columns)),
-        },
-    )
-
     # Normalize headers (strip whitespace, uppercase, collapse multiple spaces)
     df.columns = _normalize_cols(df.columns)
 
-    _append_debug_log(
-        runId="pre-fix",
-        hypothesisId="H2",
-        location="dsno_processor/customer_reader.py:read_customer_sheet(normalized)",
-        message="Customer sheet normalized headers",
-        data={
-            "ncols": int(len(df.columns)),
-            "columns_sig": _col_signature(list(df.columns)),
-        },
-    )
     return df
 
 
@@ -231,23 +126,6 @@ def get_dsno_info(invoice: int, customer_sheet: pd.DataFrame) -> DsnoInfo | None
 
     missing = required - set(df.columns)
     if missing:
-        _append_debug_log(
-            runId="pre-fix",
-            hypothesisId="H3",
-            location="dsno_processor/customer_reader.py:get_dsno_info(missing)",
-            message="Required columns missing (exact match failed)",
-            data={
-                "invoice": int(invoice),
-                "required": sorted(required),
-                "missing": sorted(missing),
-                "available_sample": _col_signature(list(df.columns), limit=40),
-                "cfg": {
-                    "invoice_col_raw": cfg.INVOICE_COL,
-                    "booking_col_raw": cfg.BOOKING_COL,
-                    "container_col_raw": cfg.CONTAINER_COL,
-                },
-            },
-        )
         raise ColumnMissingError(
             f"Missing columns in sheet: {missing}. "
             "The column name might have changed — please check the sheet headers."

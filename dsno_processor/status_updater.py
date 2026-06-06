@@ -11,6 +11,7 @@ import openpyxl
 
 log = logging.getLogger(__name__)
 
+
 def update_control_sheet_status(
     control_sheet_path: Path | str,
     processed_dir: Path | str,
@@ -44,7 +45,7 @@ def update_control_sheet_status(
         return 0
 
     log.info("Updating STATUS column in control sheet: %s", cs_path.name)
-    
+
     try:
         backup_dir = cs_path.parent / "control_sheet_backups"
         backup_dir.mkdir(exist_ok=True)

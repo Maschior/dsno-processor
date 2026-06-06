@@ -49,22 +49,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── App ─────────────────────────────────────────────────
         "app.title": "DSNO Processor",
         "app.subtitle": "Process and edit DSNO files according to ASN spreadsheets.",
-
         # ── Header / global buttons ─────────────────────────────
         "btn.settings": "Settings",
         "btn.browse": "Browse",
         "btn.save": "Save",
         "btn.cancel": "Cancel",
-
         # ── Main tabs ───────────────────────────────────────────
         "tab.processor": "Processor",
         "tab.download": "EBS Download",
         "tab.upload": "EBS Upload",
-
         # ── Sub-tabs ────────────────────────────────────────────
         "tab.configuration": "Configuration",
         "tab.progress": "Progress",
-
         # ── Processor tab ───────────────────────────────────────
         "proc.date_range": "Date Range:",
         "proc.start": "Start:",
@@ -78,7 +74,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.freight_mode_hint": "SEA/ROAD = prefer Softway when different. AIR = use Oracle.",
         "proc.air": "AIR",
         "proc.sea": "SEA/ROAD",
-
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Period",
         "dl.start_date": "Start Date:",
@@ -98,7 +93,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dl.section_folders": "Folders",
         "dl.folder_indices": "Folder Indices:",
         "dl.start_btn": "Start Download",
-
         # ── Upload tab ──────────────────────────────────────────
         "ul.section_connection": "Connection",
         "ul.ebs_url": "EBS URL:",
@@ -107,14 +101,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "ul.section_folders": "Folders",
         "ul.folder_index": "Folder Index:",
         "ul.start_btn": "Start Upload",
-
         # ── Browse dialog titles ────────────────────────────────
         "browse.customer_sheet": "Select Customer Sheet",
         "browse.control_sheet": "Select Control Sheet",
         "browse.dsno_directory": "Select DSNO Directory",
         "browse.download_dir": "Select Download Directory",
         "browse.upload_dir": "Select Upload Directory",
-
         # ── Progress dashboard ──────────────────────────────────
         "dash.waiting": "Waiting to start...",
         "dash.starting": "Starting...",
@@ -131,18 +123,15 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dash.cancelled": "Cancelled",
         "dash.completed_success": "Completed successfully!",
         "dash.completed_errors": "Completed with {count} error(s)",
-
         # ── Calendar ────────────────────────────────────────────
         "cal.time": "Time",
         "cal.apply": "Apply",
         "cal.cancel": "Cancel",
         "cal.days": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
-
         # ── Settings window ─────────────────────────────────────
         "settings.title": "Settings",
         "settings.header": "Application Settings",
         "settings.subtitle": "Edit the persistent settings saved in config.toml.",
-
         # ── Settings tabs ───────────────────────────────────────
         "settings.tab.general": "General",
         "settings.tab.paths": "Paths",
@@ -151,7 +140,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.tab.columns": "Columns",
         "settings.tab.folders": "Folders",
         "settings.tab.credentials": "Credentials",
-
         # ── Settings: General ───────────────────────────────────
         "settings.general.hint": "General application preferences.",
         "settings.general.language": "Language:",
@@ -161,7 +149,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.general.data_source_hint": "Select where to read/write DSNO data: directly from spreadsheets or via the local database.",
         "settings.data_source.spreadsheet": "Spreadsheet",
         "settings.data_source.database": "Database",
-
         # ── Settings: Paths ─────────────────────────────────────
         "settings.paths.hint": "Directories and files used by the DSNO processor.",
         "settings.paths.dsno_directory": "DSNO Directory:",
@@ -172,12 +159,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.paths.customer_sheet_hint": "Customer spreadsheet (optional).",
         "settings.paths.customer_pre_path": "Customer Pre-Path:",
         "settings.paths.customer_pre_path_hint": "Default folder for browsing customer sheets.",
-
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Settings that control the processing behaviour.",
         "settings.processor.bypass_file_size_check": "Bypass file size verification:",
         "settings.processor.bypass_file_size_check_hint": "If enabled, processing will not fail when the output file size is unchanged (useful for tests).",
-
         # ── Settings: EBS ───────────────────────────────────────
         "settings.ebs.hint": "Oracle EBS URLs and directories for download and upload.",
         "settings.ebs.download_url": "Download URL:",
@@ -191,7 +176,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.ebs.headless_hint": "When enabled, the browser runs in the background (invisible).",
         "settings.ebs.headless": "Headless Mode:",
         "settings.ebs.headless_switch": "Browser in background",
-
         # ── Settings: Columns ───────────────────────────────────
         "settings.columns.hint": "Column names used in the EBS spreadsheets.",
         "settings.columns.invoice_hint": "Name of the column containing the invoice number in the control sheet.",
@@ -210,27 +194,23 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.columns.cust_container": "Container:",
         "settings.columns.cust_sheet_name": "Sheet Name:",
         "settings.columns.cust_sheet_name_hint": "Leave empty to use the first sheet. (NOTE: This is not the file name, but the sheet name.)",
-
         # ── Settings: Folders ───────────────────────────────────
         "settings.folders.hint": "Folder indices used by EBS for download and upload.",
         "settings.folders.download_indices": "Download Indices:",
         "settings.folders.download_indices_hint": "Comma-separated indices (e.g. 92, 95, 101).",
         "settings.folders.upload_index": "Upload Index:",
         "settings.folders.upload_index_hint": "Folder index for uploading.",
-
         # ── Settings: Credentials ───────────────────────────────
         "settings.credentials.hint": "Credentials used for automatic Microsoft / EBS login.",
         "settings.credentials.email": "Email:",
         "settings.credentials.email_hint": "Corporate email address.",
         "settings.credentials.password": "Password:",
         "settings.credentials.password_hint": "Password used for automatic login.",
-
         # ── Settings: Save messages ─────────────────────────────
         "settings.saved_title": "Settings",
         "settings.saved_msg": "Settings saved successfully!\nChanges are now in effect.",
         "settings.save_error_title": "Error",
         "settings.save_error_msg": "Error saving settings:\n{error}",
-
         # ── Processing messages ─────────────────────────────────
         "msg.complete_title": "Complete",
         "msg.success_title": "Success",
@@ -242,7 +222,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "msg.download_complete": "Download complete: {success}/{total} successful.",
         "msg.upload_complete": "Upload complete: {success}/{total} successful.",
         "msg.cancelling": "Cancelling...\nPlease wait.",
-
         # ── Import wizard ──────────────────────────────────────
         "import.title": "Import Customer Sheet",
         "import.select_file": "Select File:",
@@ -252,7 +231,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "import.error": "Import failed: {error}",
         "import.no_file": "Please select a file first.",
         "import.btn_label": "Import Customer Sheet to DB",
-        
         "import_control.title": "Import Control Sheet",
         "import_control.select_file": "Select File:",
         "import_control.btn_browse": "Browse",
@@ -263,7 +241,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "import_control.no_file": "Please select a file first.",
         "import_control.btn_label": "Import Control Sheet to DB",
     },
-
     # ══════════════════════════════════════════════════════════════
     # PORTUGUESE
     # ══════════════════════════════════════════════════════════════
@@ -271,22 +248,18 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         # ── App ─────────────────────────────────────────────────
         "app.title": "DSNO Processor",
         "app.subtitle": "Processar e editar arquivos DSNO conforme planilhas ASN.",
-
         # ── Header / global buttons ─────────────────────────────
         "btn.settings": "Configurações",
         "btn.browse": "Procurar",
         "btn.save": "Salvar",
         "btn.cancel": "Cancelar",
-
         # ── Main tabs ───────────────────────────────────────────
         "tab.processor": "Processador",
         "tab.download": "EBS Download",
         "tab.upload": "EBS Upload",
-
         # ── Sub-tabs ────────────────────────────────────────────
         "tab.configuration": "Configuração",
         "tab.progress": "Progresso",
-
         # ── Processor tab ───────────────────────────────────────
         "proc.date_range": "Período:",
         "proc.start": "Início:",
@@ -300,7 +273,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "proc.freight_mode_hint": "MARÍTIMO/RODOVIÁRIO = prefere Softway quando diferente. AÉREO = usa Softway.",
         "proc.air": "AÉREO",
         "proc.sea": "MARÍTIMO/RODOVIÁRIO",
-
         # ── Download tab ────────────────────────────────────────
         "dl.section_period": "Período",
         "dl.start_date": "Data Início:",
@@ -320,7 +292,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dl.section_folders": "Pastas",
         "dl.folder_indices": "Índices de Pastas:",
         "dl.start_btn": "Iniciar Download",
-
         # ── Upload tab ──────────────────────────────────────────
         "ul.section_connection": "Conexão",
         "ul.ebs_url": "URL EBS:",
@@ -329,14 +300,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "ul.section_folders": "Pastas",
         "ul.folder_index": "Índice da Pasta:",
         "ul.start_btn": "Iniciar Upload",
-
         # ── Browse dialog titles ────────────────────────────────
         "browse.customer_sheet": "Selecionar Planilha do Cliente",
         "browse.control_sheet": "Selecionar Planilha de Controle",
         "browse.dsno_directory": "Selecionar Diretório DSNO",
         "browse.download_dir": "Selecionar Diretório de Download",
         "browse.upload_dir": "Selecionar Diretório de Upload",
-
         # ── Progress dashboard ──────────────────────────────────
         "dash.waiting": "Aguardando início...",
         "dash.starting": "Iniciando...",
@@ -353,18 +322,15 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "dash.cancelled": "Cancelado",
         "dash.completed_success": "Concluído com sucesso!",
         "dash.completed_errors": "Concluído com {count} erro(s)",
-
         # ── Calendar ────────────────────────────────────────────
         "cal.time": "Horário",
         "cal.apply": "Aplicar",
         "cal.cancel": "Cancelar",
         "cal.days": "Seg,Ter,Qua,Qui,Sex,Sáb,Dom",
-
         # ── Settings window ─────────────────────────────────────
         "settings.title": "Configurações",
         "settings.header": "Configurações do Aplicativo",
         "settings.subtitle": "Edite as configurações persistidas no config.toml.",
-
         # ── Settings tabs ───────────────────────────────────────
         "settings.tab.general": "Geral",
         "settings.tab.paths": "Caminhos",
@@ -373,7 +339,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.tab.columns": "Colunas",
         "settings.tab.folders": "Pastas",
         "settings.tab.credentials": "Credenciais",
-
         # ── Settings: General ───────────────────────────────────
         "settings.general.hint": "Preferências gerais do aplicativo.",
         "settings.general.language": "Idioma:",
@@ -383,7 +348,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.general.data_source_hint": "Selecione onde ler/gravar dados do DSNO: diretamente nas planilhas ou através do banco de dados local.",
         "settings.data_source.spreadsheet": "Planilha",
         "settings.data_source.database": "Banco de Dados",
-
         # ── Settings: Paths ─────────────────────────────────────
         "settings.paths.hint": "Diretórios e arquivos utilizados pelo processador DSNO.",
         "settings.paths.dsno_directory": "Diretório DSNO:",
@@ -394,12 +358,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.paths.customer_sheet_hint": "Planilha do cliente (opcional).",
         "settings.paths.customer_pre_path": "Pré-Caminho Cliente:",
         "settings.paths.customer_pre_path_hint": "Pasta padrão para navegação de planilhas.",
-
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Configurações que controlam o comportamento do processamento.",
         "settings.processor.bypass_file_size_check": "Ignorar verificação de tamanho do arquivo:",
         "settings.processor.bypass_file_size_check_hint": "Se ativado, o processamento não falhará quando o tamanho do arquivo não mudar (útil para testes).",
-
         # ── Settings: EBS ───────────────────────────────────────
         "settings.ebs.hint": "URLs e diretórios do Oracle EBS para download e upload.",
         "settings.ebs.download_url": "URL Download:",
@@ -413,7 +375,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.ebs.headless_hint": "Quando ativado, o navegador roda em segundo plano (invisível).",
         "settings.ebs.headless": "Modo Headless:",
         "settings.ebs.headless_switch": "Navegador em segundo plano",
-
         # ── Settings: Columns ───────────────────────────────────
         "settings.columns.hint": "Nomes das colunas usadas nas planilhas do EBS.",
         "settings.columns.invoice_hint": "Nome da coluna que contém o número da fatura na planilha de controle.",
@@ -432,27 +393,23 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.columns.cust_container": "Container:",
         "settings.columns.cust_sheet_name": "Nome da Planilha:",
         "settings.columns.cust_sheet_name_hint": "Deixe em branco para usar a primeira planilha. (OBS: Não é o nome do arquivo, mas da planilha dentro do arquivo)",
-
         # ── Settings: Folders ───────────────────────────────────
         "settings.folders.hint": "Índices de pastas usados pelo EBS para download e upload.",
         "settings.folders.download_indices": "Índices Download:",
         "settings.folders.download_indices_hint": "Índices separados por vírgula (ex: 92, 95, 101).",
         "settings.folders.upload_index": "Índice Upload:",
         "settings.folders.upload_index_hint": "Índice da pasta de upload.",
-
         # ── Settings: Credentials ───────────────────────────────
         "settings.credentials.hint": "Credenciais usadas para login automático no Microsoft / EBS.",
         "settings.credentials.email": "Email:",
         "settings.credentials.email_hint": "Endereço de e-mail corporativo.",
         "settings.credentials.password": "Senha:",
         "settings.credentials.password_hint": "Senha utilizada no login automático.",
-
         # ── Settings: Save messages ─────────────────────────────
         "settings.saved_title": "Configurações",
         "settings.saved_msg": "Configurações salvas com sucesso!\nAs alterações já estão em vigor.",
         "settings.save_error_title": "Erro",
         "settings.save_error_msg": "Erro ao salvar configurações:\n{error}",
-
         # ── Processing messages ─────────────────────────────────
         "msg.complete_title": "Concluído",
         "msg.success_title": "Sucesso",
@@ -464,7 +421,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "msg.download_complete": "Download concluído: {success}/{total} com sucesso.",
         "msg.upload_complete": "Upload concluído: {success}/{total} com sucesso.",
         "msg.cancelling": "Cancelando...\nPor favor, aguarde.",
-
         # ── Import wizard ──────────────────────────────────────
         "import.title": "Importar Planilha do Cliente",
         "import.select_file": "Selecionar Arquivo:",
@@ -474,7 +430,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "import.error": "Falha na importação: {error}",
         "import.no_file": "Selecione um arquivo primeiro.",
         "import.btn_label": "Importar Planilha do Cliente para DB",
-        
         "import_control.title": "Importar Planilha de Controle",
         "import_control.select_file": "Selecionar Arquivo:",
         "import_control.btn_browse": "Procurar",

@@ -26,7 +26,7 @@ class FreightMode(Enum):
     @classmethod
     def _missing_(cls, value):
         value_str = str(value).upper()
-        
+
         translations = {
             "AÉREO": cls.AIR,
             "AEREO": cls.AIR,
@@ -35,19 +35,21 @@ class FreightMode(Enum):
             "MARITIMA": cls.SEA,
             "SEA/ROAD": cls.SEA,
         }
-        
+
         if value_str in translations:
             return translations[value_str]
-        
+
         return super()._missing_(value)
-        
+
     @classmethod
     def from_string(cls, value: str) -> FreightMode:
         """Parse a string into a FreightMode, case-insensitive."""
         try:
             return cls(value.upper())
         except ValueError:
-            raise ValueError(f"Invalid freight mode: {value!r}. Must be 'AIR' or 'SEA'.")
+            raise ValueError(
+                f"Invalid freight mode: {value!r}. Must be 'AIR' or 'SEA'."
+            )
 
 
 @dataclass(frozen=True)

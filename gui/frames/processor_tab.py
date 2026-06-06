@@ -41,7 +41,9 @@ class ProcessorTabMixin:
             width=130,
             anchor="w",
         ).pack(side="left")
-        self.start_date = DateInput(date_frame, label=t("proc.start"), prefill_today=True)
+        self.start_date = DateInput(
+            date_frame, label=t("proc.start"), prefill_today=True
+        )
         self.start_date.pack(side="left", padx=(0, 20))
         self.end_date = DateInput(date_frame, label=t("proc.end"), prefill_today=True)
         self.end_date.pack(side="left", padx=(0, 20))
@@ -56,7 +58,12 @@ class ProcessorTabMixin:
         try:
             cfg = load_config()
             if getattr(cfg.general, "data_source", "spreadsheet") == "database":
-                from dsno_processor.database import get_db_path, get_connection, get_status_options as db_get_status_options
+                from dsno_processor.database import (
+                    get_db_path,
+                    get_connection,
+                    get_status_options as db_get_status_options,
+                )
+
                 conn = get_connection(get_db_path())
                 status_options = db_get_status_options(conn)
                 conn.close()
@@ -137,7 +144,8 @@ class ProcessorTabMixin:
             import_frame,
             text=t("import.btn_label"),
             image=db_icon,
-            height=28, corner_radius=8,
+            height=28,
+            corner_radius=8,
             fg_color=("gray75", "gray25"),
             hover_color=("gray65", "gray35"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
@@ -148,7 +156,8 @@ class ProcessorTabMixin:
             import_frame,
             text=t("import_control.btn_label"),
             image=db_icon,
-            height=28, corner_radius=8,
+            height=28,
+            corner_radius=8,
             fg_color=("gray75", "gray25"),
             hover_color=("gray65", "gray35"),
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
@@ -158,13 +167,20 @@ class ProcessorTabMixin:
         # Progress dashboard with integrated Start button
         self.dashboard = ProgressDashboard(
             tab,
-            cancel_command=lambda: (self._show_blocking_overlay(), getattr(self, "_processor_cancel_event").set()) if hasattr(self, "_processor_cancel_event") else None,
+            cancel_command=lambda: (
+                (
+                    self._show_blocking_overlay(),
+                    getattr(self, "_processor_cancel_event").set(),
+                )
+                if hasattr(self, "_processor_cancel_event")
+                else None
+            ),
             enable_idle_hourglass=False,
             start_btn_text=t("proc.start_btn"),
-            start_btn_command=self._start_processing
+            start_btn_command=self._start_processing,
         )
         self.dashboard.pack(fill="both", expand=True, pady=(10, 0))
-        self.run_btn = self.dashboard.start_btn # Alias for existing logic
+        self.run_btn = self.dashboard.start_btn  # Alias for existing logic
 
         # Initial button state
         self._update_run_btn_state()
@@ -173,17 +189,17 @@ class ProcessorTabMixin:
         """Enable or disable the Start button based on field completion."""
         if not hasattr(self, "run_btn"):
             return
-            
+
         c1 = self.customer_row.get().strip()
         c2 = self.control_row.get().strip()
         c3 = self.dsno_row.get().strip()
-        
+
         is_ready = bool(c1 and c2 and c3)
 
         if not self.run_btn:
             log.warning("Run button not found when updating state")
             return
-        
+
         self.run_btn.configure(
             state="normal" if is_ready else "disabled",
             fg_color=("#1f6aa5", "#1f6aa5") if is_ready else ("gray70", "gray30"),
@@ -193,6 +209,5 @@ class ProcessorTabMixin:
     # Tab: EBS Download
     # ──────────────────────────────────────────────────────────────
 
-    _DL_TAB_CONFIG   = t("tab.configuration")
+    _DL_TAB_CONFIG = t("tab.configuration")
     _DL_TAB_PROGRESS = t("tab.progress")
-

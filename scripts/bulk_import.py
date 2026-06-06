@@ -111,7 +111,8 @@ def find_excel_files(root: Path) -> list[Path]:
     # Exclude files inside the not-imported folder and temp lock files
     not_imported = root / "not-imported"
     files = [
-        f for f in files 
+        f
+        for f in files
         if not f.is_relative_to(not_imported) and not f.name.startswith("~$")
     ]
     # Sort by path for deterministic ordering
@@ -180,7 +181,10 @@ def main() -> None:
             pending.append(f)
 
     if skipped_history:
-        log.info("Skipping %d file(s) already imported (use --force to re-import)", len(skipped_history))
+        log.info(
+            "Skipping %d file(s) already imported (use --force to re-import)",
+            len(skipped_history),
+        )
 
     if not pending:
         log.info("All files have already been imported!")

@@ -118,9 +118,7 @@ class TestGetInvoiceDsnoPairs:
             from dsno_processor.control_reader import get_invoice_dsno_pairs
 
             dr = DateRange.from_string("01/01/2026;28/02/2026")
-            pairs = get_invoice_dsno_pairs(
-                dr, control_sheet_df, status_filter=["Open"]
-            )
+            pairs = get_invoice_dsno_pairs(dr, control_sheet_df, status_filter=["Open"])
             invoices = [p[0] for p in pairs]
             assert 100001 in invoices
             assert 100003 in invoices

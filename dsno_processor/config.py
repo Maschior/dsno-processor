@@ -30,6 +30,7 @@ class GeneralConfig:
     language: str = "en"
     data_source: str = "spreadsheet"
 
+
 @dataclass
 class PathsConfig:
     """File-system paths used by the processor."""
@@ -70,10 +71,11 @@ class CustomerSheetColsConfig:
     booking: str = "Booking/HAWB"
     container: str = "Container"
 
+
 @dataclass
 class CustomerSheetPropertiesConfig:
     """Configuration for reading the Customer spreadsheet."""
-    
+
     sheet_name: str = ""
 
 
@@ -316,7 +318,7 @@ def _config_to_dict(config: AppConfig) -> dict:
             },
             "config": {
                 "sheet_name": config.customer_sheet_properties.sheet_name,
-            }
+            },
         },
         "control_sheet": {
             "cols": {
@@ -357,7 +359,6 @@ def _dict_to_config(data: dict) -> AppConfig:
     ctrl_sheet_d = data.get("control_sheet", {})
     ctrl_cols_d = ctrl_sheet_d.get("cols", {})
     ebs_d = data.get("ebs", {})
-    
 
     folders_d = ebs_d.get("folders", ebs_d.get("pastas", {}))
     cred_d = data.get("credentials", {})
@@ -371,9 +372,7 @@ def _dict_to_config(data: dict) -> AppConfig:
             dsno_directory=Path(paths_d.get("dsno_directory", "")),
             control_sheet=Path(paths_d.get("control_sheet", "")),
             customer_sheet=Path(paths_d.get("customer_sheet", "")),
-            customer_sheet_pre_path=Path(
-                paths_d.get("customer_sheet_pre_path", "")
-            ),
+            customer_sheet_pre_path=Path(paths_d.get("customer_sheet_pre_path", "")),
         ),
         processor=ProcessorConfig(
             bypass_file_size_check=bool(proc_d.get("bypass_file_size_check", False)),
@@ -402,9 +401,7 @@ def _dict_to_config(data: dict) -> AppConfig:
             upload_dir=Path(ebs_d.get("upload_dir", "")),
             headless=ebs_d.get("headless", False),
             folders=EbsFoldersConfig(
-                download_indices=folders_d.get(
-                    "download_indices", [92, 95, 101]
-                ),
+                download_indices=folders_d.get("download_indices", [92, 95, 101]),
                 upload_index=folders_d.get(
                     "upload_index",
                     folders_d.get("upload_indice", 92),
@@ -444,7 +441,6 @@ def _migrate_ini_to_toml(
         int(x.strip()) for x in folder_indices_raw.split(",") if x.strip()
     ]
 
-
     config = AppConfig(
         general=GeneralConfig(
             language=general_sec.get("LANGUAGE", "en"),
@@ -454,9 +450,7 @@ def _migrate_ini_to_toml(
             dsno_directory=Path(paths_sec.get("DSNO_DIRECTORY", "")),
             control_sheet=Path(paths_sec.get("CONTROL_SHEET", "")),
             customer_sheet=Path(paths_sec.get("CUSTOMER_SHEET", "")),
-            customer_sheet_pre_path=Path(
-                paths_sec.get("CUSTOMER_SHEET_PRE_PATH", "")
-            ),
+            customer_sheet_pre_path=Path(paths_sec.get("CUSTOMER_SHEET_PRE_PATH", "")),
         ),
         processor=ProcessorConfig(
             bypass_file_size_check=False,
@@ -480,9 +474,7 @@ def _migrate_ini_to_toml(
             upload_dir=Path(ebs_sec.get("UPLOAD_DIR", "")),
             folders=EbsFoldersConfig(
                 download_indices=folder_indices,
-                upload_index=int(
-                    ebs_sec.get("UPLOAD_PASTA_INDICE", "92")
-                ),
+                upload_index=int(ebs_sec.get("UPLOAD_PASTA_INDICE", "92")),
             ),
         ),
         credentials=CredentialsConfig(
@@ -541,9 +533,7 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         if legacy.exists():
             return _migrate_ini_to_toml(legacy, config_path)
 
-        raise ConfigurationError(
-            f"Configuration file not found: {config_path}"
-        )
+        raise ConfigurationError(f"Configuration file not found: {config_path}")
 
     # ── Read TOML ────────────────────────────────────────────────
     with open(config_path, "rb") as fh:

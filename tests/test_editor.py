@@ -76,6 +76,7 @@ class TestEditField:
     def test_success_message_logged(self, tmp_path: Path, caplog):
         fp = _write_file(tmp_path / "f.txt", "AAABBBCCC\n")
         import logging
+
         with caplog.at_level(logging.INFO):
             edit_field(fp, "AAA", 4, 6, "XXX", success_message="Edited!")
         assert "Edited!" in caplog.text

@@ -18,3 +18,8 @@ config.txt
 config.toml
 
 .ruff_cache
+# Runtime/generated project artifacts
+*.log
+*.db
+*_history.json
+Output/

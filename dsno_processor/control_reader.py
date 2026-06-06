@@ -81,7 +81,6 @@ def get_status_options(control_sheet: pd.DataFrame) -> list[str]:
     Returns an empty list if fewer than two distinct values exist.
     """
     try:
-
         values = sorted(control_sheet[_STATUS_COL].dropna().unique().tolist())
         return values if len(values) > 1 else []
     except Exception as exc:
@@ -157,7 +156,7 @@ def get_invoice_dsno_pairs(
     df_filtered = df.loc[mask].dropna(subset=[invoice_col, dsno_col])
 
     # Remove duplicatas da coluna DSNO_FILENAME
-    df_filtered = df_filtered.drop_duplicates(subset=[dsno_col], keep='first')
+    df_filtered = df_filtered.drop_duplicates(subset=[dsno_col], keep="first")
 
     invoices = df_filtered[invoice_col].astype("Int64").tolist()
     dsnos = df_filtered[dsno_col].astype(str).tolist()

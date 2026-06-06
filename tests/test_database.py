@@ -46,19 +46,28 @@ def populated_db(db):
     """Database with sample control and shipment records."""
     records = [
         ControlRecord(
-            invoice=1001, dsno_filename="DSNO001.txt",
+            invoice=1001,
+            dsno_filename="DSNO001.txt",
             creation_date=datetime(2026, 3, 10),
-            status="Open", freight_oracle="MARITIMA", freight_softway="MARITIMA",
+            status="Open",
+            freight_oracle="MARITIMA",
+            freight_softway="MARITIMA",
         ),
         ControlRecord(
-            invoice=1002, dsno_filename="DSNO002.txt",
+            invoice=1002,
+            dsno_filename="DSNO002.txt",
             creation_date=datetime(2026, 3, 15),
-            status="Processed", freight_oracle="AEREA", freight_softway=None,
+            status="Processed",
+            freight_oracle="AEREA",
+            freight_softway=None,
         ),
         ControlRecord(
-            invoice=1003, dsno_filename="DSNO003.txt",
+            invoice=1003,
+            dsno_filename="DSNO003.txt",
             creation_date=datetime(2026, 4, 1),
-            status=None, freight_oracle="MARITIMA", freight_softway="MARITIMA",
+            status=None,
+            freight_oracle="MARITIMA",
+            freight_softway="MARITIMA",
         ),
     ]
     for r in records:
@@ -113,9 +122,11 @@ class TestLifecycle:
 class TestControlCRUD:
     def test_insert_and_retrieve(self, db):
         rec = ControlRecord(
-            invoice=100, dsno_filename="DSNO100.txt",
+            invoice=100,
+            dsno_filename="DSNO100.txt",
             creation_date=datetime(2026, 1, 15),
-            status="Open", freight_oracle="SEA",
+            status="Open",
+            freight_oracle="SEA",
         )
         row_id = insert_control_record(db, rec)
         assert row_id > 0
@@ -127,7 +138,8 @@ class TestControlCRUD:
 
     def test_unique_dsno_filename(self, db):
         rec = ControlRecord(
-            invoice=100, dsno_filename="DSNO100.txt",
+            invoice=100,
+            dsno_filename="DSNO100.txt",
             creation_date=datetime(2026, 1, 1),
         )
         insert_control_record(db, rec)
@@ -136,34 +148,46 @@ class TestControlCRUD:
 
     def test_upsert_updates_existing(self, db):
         rec = ControlRecord(
-            invoice=100, dsno_filename="DSNO100.txt",
-            creation_date=datetime(2026, 1, 1), status="Open",
+            invoice=100,
+            dsno_filename="DSNO100.txt",
+            creation_date=datetime(2026, 1, 1),
+            status="Open",
         )
         insert_control_record(db, rec)
 
         updated = ControlRecord(
-            invoice=100, dsno_filename="DSNO100.txt",
-            creation_date=datetime(2026, 1, 2), status="Processed",
+            invoice=100,
+            dsno_filename="DSNO100.txt",
+            creation_date=datetime(2026, 1, 2),
+            status="Processed",
         )
         upsert_control_record(db, updated)
 
-        row = db.execute("SELECT * FROM tb_control WHERE DSNO_FILENAME = 'DSNO100.txt'").fetchone()
+        row = db.execute(
+            "SELECT * FROM tb_control WHERE DSNO_FILENAME = 'DSNO100.txt'"
+        ).fetchone()
         assert row["STATUS"] == "Processed"
 
     def test_upsert_preserves_null_status(self, db):
         rec = ControlRecord(
-            invoice=100, dsno_filename="DSNO100.txt",
-            creation_date=datetime(2026, 1, 1), status="Open",
+            invoice=100,
+            dsno_filename="DSNO100.txt",
+            creation_date=datetime(2026, 1, 1),
+            status="Open",
         )
         insert_control_record(db, rec)
 
         updated = ControlRecord(
-            invoice=100, dsno_filename="DSNO100.txt",
-            creation_date=datetime(2026, 1, 1), status=None,
+            invoice=100,
+            dsno_filename="DSNO100.txt",
+            creation_date=datetime(2026, 1, 1),
+            status=None,
         )
         upsert_control_record(db, updated)
 
-        row = db.execute("SELECT STATUS FROM tb_control WHERE DSNO_FILENAME = 'DSNO100.txt'").fetchone()
+        row = db.execute(
+            "SELECT STATUS FROM tb_control WHERE DSNO_FILENAME = 'DSNO100.txt'"
+        ).fetchone()
         assert row["STATUS"] == "Open"  # preserved, not overwritten with None
 
 
@@ -223,10 +247,15 @@ class TestGetStatusOptions:
         assert options == ["Open", "Processed"]
 
     def test_returns_empty_if_less_than_two(self, db):
-        insert_control_record(db, ControlRecord(
-            invoice=1, dsno_filename="D1.txt",
-            creation_date=datetime(2026, 1, 1), status="Open",
-        ))
+        insert_control_record(
+            db,
+            ControlRecord(
+                invoice=1,
+                dsno_filename="D1.txt",
+                creation_date=datetime(2026, 1, 1),
+                status="Open",
+            ),
+        )
         assert get_status_options(db) == []
 
 
@@ -257,7 +286,8 @@ class TestUpdateStatusesForProcessed:
 
     def test_skips_already_processed(self, populated_db):
         count = update_statuses_for_processed(
-            populated_db, {"DSNO002.txt"}  # already "Processed"
+            populated_db,
+            {"DSNO002.txt"},  # already "Processed"
         )
         assert count == 0
 
@@ -287,7 +317,9 @@ class TestShipmentCRUD:
         rec = ShipmentRecord(esn=12345, invoice=200, booking="BK-1", container="CNT-1")
         insert_shipment(db, rec)
 
-        updated = ShipmentRecord(esn=12345, invoice=200, booking="BK-2", container="CNT-2")
+        updated = ShipmentRecord(
+            esn=12345, invoice=200, booking="BK-2", container="CNT-2"
+        )
         upsert_shipment(db, updated)
 
         info = get_shipment_info(db, 200)
@@ -295,8 +327,12 @@ class TestShipmentCRUD:
 
     def test_multiple_null_esn_allowed(self, db):
         """NULL ESNs are distinct — multiple inserts should succeed."""
-        insert_shipment(db, ShipmentRecord(invoice=300, booking="BK-A", container="C-A"))
-        insert_shipment(db, ShipmentRecord(invoice=300, booking="BK-B", container="C-B"))
+        insert_shipment(
+            db, ShipmentRecord(invoice=300, booking="BK-A", container="C-A")
+        )
+        insert_shipment(
+            db, ShipmentRecord(invoice=300, booking="BK-B", container="C-B")
+        )
 
         rows = db.execute(
             "SELECT COUNT(*) as cnt FROM tb_shipment_info WHERE INVOICE = 300"
@@ -305,7 +341,9 @@ class TestShipmentCRUD:
 
     def test_get_returns_first_match(self, db):
         insert_shipment(db, ShipmentRecord(invoice=300, booking="FIRST", container="C"))
-        insert_shipment(db, ShipmentRecord(invoice=300, booking="SECOND", container="C"))
+        insert_shipment(
+            db, ShipmentRecord(invoice=300, booking="SECOND", container="C")
+        )
 
         info = get_shipment_info(db, 300)
         assert info.booking == "FIRST"
@@ -360,9 +398,14 @@ class TestImportCustomerSheet:
         insert_shipment(db, rec)
 
         # Upserting the same ESN should update, not duplicate
-        upsert_shipment(db, ShipmentRecord(esn=9999, invoice=7000, booking="BK-NEW", container="CNT"))
+        upsert_shipment(
+            db,
+            ShipmentRecord(esn=9999, invoice=7000, booking="BK-NEW", container="CNT"),
+        )
 
-        rows = db.execute("SELECT COUNT(*) as cnt FROM tb_shipment_info WHERE ESN = 9999").fetchone()
+        rows = db.execute(
+            "SELECT COUNT(*) as cnt FROM tb_shipment_info WHERE ESN = 9999"
+        ).fetchone()
         assert rows["cnt"] == 1
 
         info = get_shipment_info(db, 7000)

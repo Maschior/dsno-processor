@@ -113,9 +113,7 @@ class TestProcessSingleDsno:
         dsno_path.write_text("content", encoding="utf-8")
 
         mock_read.return_value = MagicMock()
-        mock_info.return_value = MagicMock(
-            invoice="100", container="CNT", booking="BK"
-        )
+        mock_info.return_value = MagicMock(invoice="100", container="CNT", booking="BK")
         mock_size.side_effect = [10, 20]  # original then new (different)
 
         result = self._process(100, dsno_path, "cust.xlsx")
@@ -151,9 +149,7 @@ class TestProcessSingleDsno:
         self, mock_read, mock_info, mock_edit, mock_normalize, mock_size, mock_db
     ):
         mock_read.return_value = MagicMock()
-        mock_info.return_value = MagicMock(
-            invoice="100", container="CNT", booking="BK"
-        )
+        mock_info.return_value = MagicMock(invoice="100", container="CNT", booking="BK")
         result = self._process(100, Path("/nonexistent/DSNO.txt"), "cust.xlsx")
         assert "not found" in result.lower()
 
@@ -176,9 +172,7 @@ class TestProcessSingleDsno:
         dsno = tmp_path / "DSNO.txt"
         dsno.write_text("content", encoding="utf-8")
         mock_read.return_value = MagicMock()
-        mock_info.return_value = MagicMock(
-            invoice="100", container="CNT", booking="BK"
-        )
+        mock_info.return_value = MagicMock(invoice="100", container="CNT", booking="BK")
         mock_size.side_effect = [10, 10]  # same size
 
         result = self._process(100, dsno, "cust.xlsx")
