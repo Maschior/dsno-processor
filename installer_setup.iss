@@ -1,7 +1,7 @@
 ; Script gerado para o Inno Setup
 ; Configurado para instalação local (Current User) - NÃO requer privilégios de Administrador.
 
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "1.0"
 
 [Setup]
 ; Informações Básicas
@@ -20,9 +20,9 @@ SetupIconFile=assets\icons\favicon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern dynamic windows11 includetitlebar
-WizardSmallImageFile=assets\logo-light.png
-WizardSmallImageFileDynamicDark=assets\logo-dark.png
-WizardImageAlphaFormat=defined
+;WizardSmallImageFile=assets\logo-light.png
+;WizardSmallImageFileDynamicDark=assets\logo-dark.png
+;WizardImageAlphaFormat=defined
 UninstallDisplayIcon={app}\favicon.ico
 
 [Languages]
