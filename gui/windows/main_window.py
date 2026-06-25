@@ -48,7 +48,7 @@ class DSNOApp(
 
         cfg = self._app_config
         if cfg:
-            set_language(cfg.language)
+            set_language(cfg.general.language)
 
         self._TAB_PROC = t("tab.processor")
         self._TAB_DOWNLOAD = t("tab.download")
@@ -64,10 +64,10 @@ class DSNOApp(
 
         self.minsize(640, 480)
 
-        default_customer = str(cfg.customer_sheet) if cfg else ""
-        default_control = str(cfg.control_sheet) if cfg else ""
-        default_dsno_dir = str(cfg.dsno_directory) if cfg else ""
-        self._customer_pre_path = str(cfg.customer_sheet_pre_path) if cfg else ""
+        default_customer = str(cfg.paths.customer_sheet) if cfg else ""
+        default_control = str(cfg.paths.control_sheet) if cfg else ""
+        default_dsno_dir = str(cfg.paths.dsno_directory) if cfg else ""
+        self._customer_pre_path = str(cfg.paths.customer_sheet_pre_path) if cfg else ""
 
         self._dl_handler = None
         self._ul_handler = None

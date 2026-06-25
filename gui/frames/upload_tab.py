@@ -91,7 +91,7 @@ class UploadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(8, 2))
         row += 1
         _lbl(t("dl.ebs_url"), row)
-        self.ul_url_var = _ent(row, cfg.ebs_upload_url if cfg else "")
+        self.ul_url_var = _ent(row, cfg.ebs.upload_url if cfg else "")
         row += 1
 
         # Files
@@ -103,10 +103,10 @@ class UploadTabMixin:
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
-        _lbl(t("ul.upload_dir"), row)
+        _lbl(t("ul.ebs.upload_dir"), row)
         self.ul_dir_var = _ent(
             row,
-            str(cfg.upload_dir) if cfg and str(cfg.upload_dir) != "." else "",
+            str(cfg.ebs.upload_dir) if cfg and str(cfg.ebs.upload_dir) != "." else "",
             placeholder="C:\\...",
         )
         ctk.CTkButton(
@@ -129,7 +129,7 @@ class UploadTabMixin:
         row += 1
         _lbl(t("ul.folder_index"), row)
         self.ul_folder_var = _ent(
-            row, str(cfg.ebs_upload_folder_index) if cfg else "92"
+            row, str(cfg.ebs.folders.upload_index) if cfg else "92"
         )
         row += 1
 

@@ -30,12 +30,12 @@ def _safe_config() -> AppConfig:
 
 
 _cfg = _safe_config()
-_DATE_COL = _cfg.DATE_COL.upper()
-_DSNO_COL = _cfg.DSNO_COL.upper()
-_INVOICE_COL = _cfg.CONTROL_INVOICE_COL.upper()
-_STATUS_COL = _cfg.STATUS_COL.upper()
-_FREIGHT_ORACLE_COL = _cfg.FREIGHT_ORACLE_COL.upper()
-_FREIGHT_SOFTWAY_COL = _cfg.FREIGHT_SOFTWAY_COL.upper()
+_DATE_COL = _cfg.control_sheet_cols.date.upper()
+_DSNO_COL = _cfg.control_sheet_cols.dsno.upper()
+_INVOICE_COL = _cfg.control_sheet_cols.invoice.upper()
+_STATUS_COL = _cfg.control_sheet_cols.status.upper()
+_FREIGHT_ORACLE_COL = _cfg.control_sheet_cols.freight_oracle.upper()
+_FREIGHT_SOFTWAY_COL = _cfg.control_sheet_cols.freight_softway.upper()
 _REQUIRED_COLUMNS = {
     _DATE_COL,
     _DSNO_COL,

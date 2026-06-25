@@ -89,35 +89,35 @@ class TestSaveLoadRoundTrip:
         save_config(cfg, toml_path)
         loaded = load_config(toml_path)
 
-        assert loaded.language == "pt"
-        assert loaded.dsno_directory == Path("C:/data/dsno")
-        assert loaded.control_sheet == Path("C:/data/control.xlsx")
-        assert loaded.DSNO_COL == "DSNO_COL"
-        assert loaded.CONTROL_INVOICE_COL == "INV"
-        assert loaded.DATE_COL == "DT"
-        assert loaded.STATUS_COL == "ST"
-        assert loaded.FREIGHT_ORACLE_COL == "FO"
-        assert loaded.FREIGHT_SOFTWAY_COL == "FS"
-        assert loaded.INVOICE_COL == "Inv"
-        assert loaded.BOOKING_COL == "Book"
-        assert loaded.CONTAINER_COL == "Cnt"
-        assert loaded.CUSTOMER_SHEET_NAME == "Sheet2"
-        assert loaded.ebs_download_url == "https://dl.example.com"
-        assert loaded.ebs_upload_url == "https://ul.example.com"
-        assert loaded.ebs_folder_indices == [10, 20]
-        assert loaded.ebs_upload_folder_index == 30
-        assert loaded.ebs_headless is True
-        assert loaded.ebs_email == "user@co.com"
-        assert loaded.ebs_password == "p@ss"
+        assert loaded.general.language == "pt"
+        assert loaded.paths.dsno_directory == Path("C:/data/dsno")
+        assert loaded.paths.control_sheet == Path("C:/data/control.xlsx")
+        assert loaded.control_sheet_cols.dsno == "DSNO_COL"
+        assert loaded.control_sheet_cols.invoice == "INV"
+        assert loaded.control_sheet_cols.date == "DT"
+        assert loaded.control_sheet_cols.status == "ST"
+        assert loaded.control_sheet_cols.freight_oracle == "FO"
+        assert loaded.control_sheet_cols.freight_softway == "FS"
+        assert loaded.customer_sheet_cols.invoice == "Inv"
+        assert loaded.customer_sheet_cols.booking == "Book"
+        assert loaded.customer_sheet_cols.container == "Cnt"
+        assert loaded.customer_sheet_properties.sheet_name == "Sheet2"
+        assert loaded.ebs.download_url == "https://dl.example.com"
+        assert loaded.ebs.upload_url == "https://ul.example.com"
+        assert loaded.ebs.folders.download_indices == [10, 20]
+        assert loaded.ebs.folders.upload_index == 30
+        assert loaded.ebs.headless is True
+        assert loaded.credentials.email == "user@co.com"
+        assert loaded.credentials.password == "p@ss"
 
     def test_defaults_preserved(self, tmp_path: Path):
         """A default AppConfig should round-trip cleanly."""
         toml_path = tmp_path / "config.toml"
         save_config(AppConfig(), toml_path)
         loaded = load_config(toml_path)
-        assert loaded.language == "en"
-        assert loaded.DSNO_COL == "ARGUMENT2"
-        assert loaded.ebs_folder_indices == [92, 95, 101]
+        assert loaded.general.language == "en"
+        assert loaded.control_sheet_cols.dsno == "ARGUMENT2"
+        assert loaded.ebs.folders.download_indices == [92, 95, 101]
 
 
 # ── dict conversion tests ───────────────────────────────────────────
@@ -137,28 +137,27 @@ class TestDictConversion:
 
     def test_dict_to_config_empty_dict(self):
         cfg = _dict_to_config({})
-        assert cfg.language == "en"
-        assert cfg.DSNO_COL == "ARGUMENT2"
-        assert cfg.ebs_folder_indices == [92, 95, 101]
+        assert cfg.general.language == "en"
+        assert cfg.control_sheet_cols.dsno == "ARGUMENT2"
+        assert cfg.ebs.folders.download_indices == [92, 95, 101]
 
     def test_dict_to_config_partial(self):
         cfg = _dict_to_config({"general": {"language": "pt"}})
-        assert cfg.language == "pt"
+        assert cfg.general.language == "pt"
         # everything else gets defaults
-        assert cfg.DSNO_COL == "ARGUMENT2"
+        assert cfg.control_sheet_cols.dsno == "ARGUMENT2"
 
 
-# ── Property aliases ─────────────────────────────────────────────────
+# ── Sub-config fields ────────────────────────────────────────────────
 
 
 class TestPropertyAliases:
-    """Verify backward-compatible property aliases on AppConfig."""
+    """Verify sub-config fields on AppConfig."""
 
     def test_language_getter_setter(self):
         cfg = AppConfig()
-        assert cfg.language == "en"
-        cfg.language = "pt"
-        assert cfg.language == "pt"
+        assert cfg.general.language == "en"
+        cfg.general.language = "pt"
         assert cfg.general.language == "pt"
 
     def test_path_aliases(self):
@@ -170,10 +169,10 @@ class TestPropertyAliases:
                 customer_sheet_pre_path=Path("/d"),
             )
         )
-        assert cfg.dsno_directory == Path("/a")
-        assert cfg.control_sheet == Path("/b")
-        assert cfg.customer_sheet == Path("/c")
-        assert cfg.customer_sheet_pre_path == Path("/d")
+        assert cfg.paths.dsno_directory == Path("/a")
+        assert cfg.paths.control_sheet == Path("/b")
+        assert cfg.paths.customer_sheet == Path("/c")
+        assert cfg.paths.customer_sheet_pre_path == Path("/d")
 
     def test_ebs_aliases(self):
         cfg = AppConfig(
@@ -190,15 +189,15 @@ class TestPropertyAliases:
             ),
             credentials=CredentialsConfig(email="e", password="p"),
         )
-        assert cfg.ebs_download_url == "dl"
-        assert cfg.ebs_upload_url == "ul"
-        assert cfg.download_dir == Path("/dl")
-        assert cfg.upload_dir == Path("/ul")
-        assert cfg.ebs_headless is True
-        assert cfg.ebs_folder_indices == [1]
-        assert cfg.ebs_upload_folder_index == 2
-        assert cfg.ebs_email == "e"
-        assert cfg.ebs_password == "p"
+        assert cfg.ebs.download_url == "dl"
+        assert cfg.ebs.upload_url == "ul"
+        assert cfg.ebs.download_dir == Path("/dl")
+        assert cfg.ebs.upload_dir == Path("/ul")
+        assert cfg.ebs.headless is True
+        assert cfg.ebs.folders.download_indices == [1]
+        assert cfg.ebs.folders.upload_index == 2
+        assert cfg.credentials.email == "e"
+        assert cfg.credentials.password == "p"
 
 
 # ── Validate paths ──────────────────────────────────────────────────
@@ -209,7 +208,7 @@ class TestValidatePaths:
 
     def test_no_warnings_for_defaults(self):
         cfg = AppConfig()
-        assert cfg.validate_paths() == []
+        assert cfg.paths.validate() == []
 
     def test_warns_for_nonexistent_paths(self, tmp_path: Path):
         cfg = AppConfig(
@@ -218,7 +217,7 @@ class TestValidatePaths:
                 control_sheet=tmp_path / "missing.xlsx",
             )
         )
-        warnings = cfg.validate_paths()
+        warnings = cfg.paths.validate()
         assert len(warnings) == 2
 
 
@@ -269,9 +268,9 @@ class TestIniMigration:
         cfg = _migrate_ini_to_toml(ini_path, toml_path)
 
         assert toml_path.exists()
-        assert cfg.language == "pt"
-        assert cfg.ebs_download_url == "https://dl"
-        assert cfg.ebs_folder_indices == [10, 20, 30]
+        assert cfg.general.language == "pt"
+        assert cfg.ebs.download_url == "https://dl"
+        assert cfg.ebs.folders.download_indices == [10, 20, 30]
 
         # Backup created
         backup = ini_path.with_suffix(".txt.bak")
@@ -289,5 +288,5 @@ class TestIniMigration:
 
         monkeypatch.chdir(tmp_path)
         cfg = load_config()
-        assert cfg.language == "en"
+        assert cfg.general.language == "en"
         assert (tmp_path / "config.toml").exists()

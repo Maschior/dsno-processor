@@ -46,7 +46,7 @@ class TestReadCustomerSheet:
         from dsno_processor.customer_reader import read_customer_sheet
 
         with patch("dsno_processor.customer_reader.cfg") as mock_cfg:
-            mock_cfg.CUSTOMER_SHEET_NAME = ""
+            mock_cfg.customer_sheet_properties.sheet_name = ""
             result = read_customer_sheet(path)
 
         assert "INVOICE" in result.columns
@@ -66,7 +66,7 @@ class TestReadCustomerSheet:
         from dsno_processor.customer_reader import read_customer_sheet
 
         with patch("dsno_processor.customer_reader.cfg") as mock_cfg:
-            mock_cfg.CUSTOMER_SHEET_NAME = "NonExistentSheet"
+            mock_cfg.customer_sheet_properties.sheet_name = "NonExistentSheet"
             with pytest.raises(SheetNotFoundError, match="not found"):
                 read_customer_sheet(path)
 

@@ -28,9 +28,9 @@ def _safe_config() -> AppConfig:
 
 
 cfg = _safe_config()
-_INVOICE_COL = cfg.INVOICE_COL.upper()
-_CONTAINER_COL = cfg.CONTAINER_COL.upper()
-_BOOKING_COL = cfg.BOOKING_COL.upper()
+_INVOICE_COL = cfg.customer_sheet_cols.invoice.upper()
+_CONTAINER_COL = cfg.customer_sheet_cols.container.upper()
+_BOOKING_COL = cfg.customer_sheet_cols.booking.upper()
 _REQUIRED_COLUMNS = {_INVOICE_COL, _BOOKING_COL}
 
 # ── Sheet loading ────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ def read_customer_sheet(customer_sheet_path: Path | str) -> pd.DataFrame:
     if not path.exists():
         raise SheetNotFoundError(f"Customer sheet not found: {path}")
 
-    sheet_name = cfg.CUSTOMER_SHEET_NAME
+    sheet_name = cfg.customer_sheet_properties.sheet_name
     required = _REQUIRED_COLUMNS
 
     # Excel files often have a blank "cover" as the first sheet.

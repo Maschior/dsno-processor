@@ -102,7 +102,7 @@ class AppPresenterMixin:
             self._customer_pre_path if os.path.exists(self._customer_pre_path) else None
         )
         path = filedialog.askopenfilename(
-            title=t("browse.customer_sheet"),
+            title=t("browse.paths.customer_sheet"),
             initialdir=initial,
             filetypes=[("Excel Files", "*.xlsx *.xls")],
         )
@@ -113,7 +113,7 @@ class AppPresenterMixin:
         current_dir = os.path.dirname(self.control_row.get())
         initial = current_dir if os.path.exists(current_dir) else None
         path = filedialog.askopenfilename(
-            title=t("browse.control_sheet"),
+            title=t("browse.paths.control_sheet"),
             initialdir=initial,
             filetypes=[("Excel Files", "*.xlsx *.xls")],
         )
@@ -124,7 +124,7 @@ class AppPresenterMixin:
         current = self.dsno_row.get()
         initial = current if os.path.exists(current) else None
         folder = filedialog.askdirectory(
-            title=t("browse.dsno_directory"), initialdir=initial
+            title=t("browse.paths.dsno_directory"), initialdir=initial
         )
         if folder:
             self.dsno_row.set(folder)
@@ -135,14 +135,14 @@ class AppPresenterMixin:
 
     def _browse_dl_sheet(self) -> None:
         path = filedialog.askopenfilename(
-            title=t("browse.customer_sheet"),
+            title=t("browse.paths.customer_sheet"),
             filetypes=[("Excel Files", "*.xlsx *.xls")],
         )
         if path:
             self.dl_sheet_var.set(path)
 
     def _browse_dl_dir(self) -> None:
-        folder = filedialog.askdirectory(title=t("browse.download_dir"))
+        folder = filedialog.askdirectory(title=t("browse.ebs.download_dir"))
         if folder:
             self.dl_dir_var.set(folder)
 
@@ -151,7 +151,7 @@ class AppPresenterMixin:
     # ──────────────────────────────────────────────────────────────
 
     def _browse_ul_dir(self) -> None:
-        folder = filedialog.askdirectory(title=t("browse.upload_dir"))
+        folder = filedialog.askdirectory(title=t("browse.ebs.upload_dir"))
         if folder:
             self.ul_dir_var.set(folder)
 
@@ -276,15 +276,15 @@ class AppPresenterMixin:
             ebs_url=self.dl_url_var.get(),
             customer_sheet_path=self.dl_sheet_var.get(),
             download_dir=self.dl_dir_var.get(),
-            email=cfg.ebs_email if cfg else "",
-            password=cfg.ebs_password if cfg else "",
+            email=cfg.credentials.email if cfg else "",
+            password=cfg.credentials.password if cfg else "",
             dsno_col=self.dl_dsno_col_var.get(),
             date_col=self.dl_date_col_var.get(),
             status_col=self.dl_status_col_var.get(),
             date_start=self.dl_date_start.get(),
             date_end=self.dl_date_end.get(),
             status_filter=self.dl_status_filter_var.get(),
-            headless=cfg.ebs_headless if cfg else False,
+            headless=cfg.ebs.headless if cfg else False,
             folder_indices=folder_indices,
         )
 
@@ -359,10 +359,10 @@ class AppPresenterMixin:
         config = UploadConfig(
             ebs_url=self.ul_url_var.get(),
             upload_dir=self.ul_dir_var.get(),
-            email=cfg.ebs_email if cfg else "",
-            password=cfg.ebs_password if cfg else "",
+            email=cfg.credentials.email if cfg else "",
+            password=cfg.credentials.password if cfg else "",
             folder_index=folder_idx,
-            headless=cfg.ebs_headless if cfg else False,
+            headless=cfg.ebs.headless if cfg else False,
         )
 
         progress_cb = self._make_dashboard_progress_callback(self.ul_dashboard)
@@ -465,7 +465,7 @@ class AppPresenterMixin:
             # Also check the download directory (if configured)
             try:
                 cfg = load_config()
-                dl_dir = str(cfg.dsno_directory) if cfg else dsno_dir
+                dl_dir = str(cfg.paths.dsno_directory) if cfg else dsno_dir
             except Exception:
                 dl_dir = dsno_dir
 
@@ -535,10 +535,10 @@ class AppPresenterMixin:
         if not self._app_config:
             return
 
-        if self._app_config.language == lang_code:
+        if self._app_config.general.language == lang_code:
             return
 
-        self._app_config.language = lang_code
+        self._app_config.general.language = lang_code
         try:
             save_config(self._app_config)
             messagebox.showinfo(
@@ -554,10 +554,10 @@ class AppPresenterMixin:
         except ConfigurationError:
             return
         cfg = self._app_config
-        self.customer_row.set(str(cfg.customer_sheet))
-        self.control_row.set(str(cfg.control_sheet))
-        self.dsno_row.set(str(cfg.dsno_directory))
-        self._customer_pre_path = str(cfg.customer_sheet_pre_path)
+        self.customer_row.set(str(cfg.paths.customer_sheet))
+        self.control_row.set(str(cfg.paths.control_sheet))
+        self.dsno_row.set(str(cfg.paths.dsno_directory))
+        self._customer_pre_path = str(cfg.paths.customer_sheet_pre_path)
 
         if hasattr(self, "_update_customer_row_visibility"):
             self._update_customer_row_visibility()

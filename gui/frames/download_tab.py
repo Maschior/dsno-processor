@@ -136,10 +136,10 @@ class DownloadTabMixin:
             text_color=("gray40", "gray55"),
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
-        _lbl(t("dl.download_dir"), row)
+        _lbl(t("dl.ebs.download_dir"), row)
         self.dl_dir_var, _ = _ent(
             row,
-            str(cfg.download_dir) if cfg and str(cfg.download_dir) != "." else "",
+            str(cfg.ebs.download_dir) if cfg and str(cfg.ebs.download_dir) != "." else "",
             placeholder="C:\\...",
         )
         ctk.CTkButton(
@@ -150,10 +150,10 @@ class DownloadTabMixin:
             font=ctk.CTkFont(family=_FONT_FAMILY, size=11),
         ).grid(row=row, column=2, padx=(4, 6), pady=4)
         row += 1
-        _lbl(t("proc.control_sheet"), row)
+        _lbl(t("proc.paths.control_sheet"), row)
         self.dl_sheet_var, _ = _ent(
             row,
-            str(cfg.control_sheet) if cfg and str(cfg.control_sheet) != "." else "",
+            str(cfg.paths.control_sheet) if cfg and str(cfg.paths.control_sheet) != "." else "",
             placeholder="C:\\...",
         )
         ctk.CTkButton(
@@ -175,7 +175,7 @@ class DownloadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("dl.ebs_url"), row)
-        self.dl_url_var, _ = _ent(row, cfg.ebs_download_url if cfg else "")
+        self.dl_url_var, _ = _ent(row, cfg.ebs.download_url if cfg else "")
         row += 1
 
         # Columns
@@ -188,15 +188,15 @@ class DownloadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         _lbl(t("dl.dsno_column"), row)
-        self.dl_dsno_col_var, _ = _ent(row, cfg.ebs_dsno_col if cfg else "ARGUMENT2")
+        self.dl_dsno_col_var, _ = _ent(row, cfg.control_sheet_cols.dsno if cfg else "ARGUMENT2")
         row += 1
         _lbl(t("dl.date_column"), row)
         self.dl_date_col_var, _ = _ent(
-            row, cfg.ebs_date_col if cfg else "CREATION_DATE"
+            row, cfg.control_sheet_cols.date if cfg else "CREATION_DATE"
         )
         row += 1
         _lbl(t("dl.status_column"), row)
-        self.dl_status_col_var, _ = _ent(row, cfg.ebs_status_col if cfg else "STATUS")
+        self.dl_status_col_var, _ = _ent(row, cfg.control_sheet_cols.status if cfg else "STATUS")
         row += 1
 
         # Folders
@@ -209,7 +209,7 @@ class DownloadTabMixin:
         ).grid(row=row, column=0, columnspan=3, sticky="w", padx=6, pady=(10, 2))
         row += 1
         indices_str = ",".join(
-            str(x) for x in (cfg.ebs_folder_indices if cfg else [92, 95, 101])
+            str(x) for x in (cfg.ebs.folders.download_indices if cfg else [92, 95, 101])
         )
         _lbl(t("dl.folder_indices"), row)
         self.dl_folders_var, _ = _ent(row, indices_str)

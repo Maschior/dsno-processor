@@ -112,7 +112,7 @@ class ImportWizard(ctk.CTkToplevel):
 
     def _browse(self) -> None:
         path = filedialog.askopenfilename(
-            title=t("browse.customer_sheet"),
+            title=t("browse.paths.customer_sheet"),
             filetypes=[("Excel Files", "*.xlsx *.xls")],
         )
         if path:
@@ -134,10 +134,10 @@ class ImportWizard(ctk.CTkToplevel):
     def _import_thread(self, file_path: str) -> None:
         try:
             cfg = self._cfg
-            inv_col = cfg.INVOICE_COL if cfg else "Invoice"
-            bk_col = cfg.BOOKING_COL if cfg else "Booking/HAWB"
-            cnt_col = cfg.CONTAINER_COL if cfg else "Container"
-            sheet_name = cfg.CUSTOMER_SHEET_NAME if cfg else None
+            inv_col = cfg.customer_sheet_cols.invoice if cfg else "Invoice"
+            bk_col = cfg.customer_sheet_cols.booking if cfg else "Booking/HAWB"
+            cnt_col = cfg.customer_sheet_cols.container if cfg else "Container"
+            sheet_name = cfg.customer_sheet_properties.sheet_name if cfg else None
 
             db_path = get_db_path()
             conn = get_connection(db_path)
@@ -210,8 +210,8 @@ class ImportControlWizard(ctk.CTkToplevel):
         self._file_entry.pack(side="left", expand=True, fill="x", padx=(0, 8))
 
         # Default to configured path if exists
-        if self._cfg and self._cfg.control_sheet:
-            self._file_entry.insert(0, str(self._cfg.control_sheet))
+        if self._cfg and self._cfg.paths.control_sheet:
+            self._file_entry.insert(0, str(self._cfg.paths.control_sheet))
 
         ctk.CTkButton(
             row,
@@ -259,7 +259,7 @@ class ImportControlWizard(ctk.CTkToplevel):
 
     def _browse(self) -> None:
         path = filedialog.askopenfilename(
-            title=t("browse.control_sheet"),
+            title=t("browse.paths.control_sheet"),
             filetypes=[("Excel Files", "*.xlsx *.xls")],
         )
         if path:
@@ -285,13 +285,13 @@ class ImportControlWizard(ctk.CTkToplevel):
     def _import_thread(self, file_path: str) -> None:
         try:
             cfg = self._cfg
-            inv_col = cfg.CONTROL_INVOICE_COL if cfg else None
-            dsno_col = cfg.DSNO_COL if cfg else None
-            date_col = cfg.DATE_COL if cfg else None
-            status_col = cfg.STATUS_COL if cfg else None
-            oracle_freight_col = cfg.FREIGHT_ORACLE_COL if cfg else None
-            softway_freight_col = cfg.FREIGHT_SOFTWAY_COL if cfg else None
-            description_col = cfg.DESCRIPTION_COL if cfg else None
+            inv_col = cfg.control_sheet_cols.invoice if cfg else None
+            dsno_col = cfg.control_sheet_cols.dsno if cfg else None
+            date_col = cfg.control_sheet_cols.date if cfg else None
+            status_col = cfg.control_sheet_cols.status if cfg else None
+            oracle_freight_col = cfg.control_sheet_cols.freight_oracle if cfg else None
+            softway_freight_col = cfg.control_sheet_cols.freight_softway if cfg else None
+            description_col = cfg.control_sheet_cols.description if cfg else None
 
             from dsno_processor.database import get_db_path, get_connection, init_db
             from dsno_processor.database import (

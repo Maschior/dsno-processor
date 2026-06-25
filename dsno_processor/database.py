@@ -606,13 +606,13 @@ def import_control_sheet(
 
     cfg = load_config()
 
-    inv_col = (invoice_col or cfg.CONTROL_INVOICE_COL).upper()
-    dsno_c = (dsno_col or cfg.DSNO_COL).upper()
-    dt_col = (date_col or cfg.DATE_COL).upper()
-    stat_col = (status_col or cfg.STATUS_COL).upper()
-    ora_col = (oracle_freight_col or cfg.FREIGHT_ORACLE_COL).upper()
-    sft_col = (softway_freight_col or cfg.FREIGHT_SOFTWAY_COL).upper()
-    desc_col = (description_col or cfg.DESCRIPTION_COL).upper()
+    inv_col = (invoice_col or cfg.control_sheet_cols.invoice).upper()
+    dsno_c = (dsno_col or cfg.control_sheet_cols.dsno).upper()
+    dt_col = (date_col or cfg.control_sheet_cols.date).upper()
+    stat_col = (status_col or cfg.control_sheet_cols.status).upper()
+    ora_col = (oracle_freight_col or cfg.control_sheet_cols.freight_oracle).upper()
+    sft_col = (softway_freight_col or cfg.control_sheet_cols.freight_softway).upper()
+    desc_col = (description_col or cfg.control_sheet_cols.description).upper()
 
     required = {inv_col, dsno_c, dt_col}
     missing = required - set(df.columns)

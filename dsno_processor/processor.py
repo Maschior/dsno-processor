@@ -187,7 +187,7 @@ def _process_single_dsno(
 
         new_size = get_size(dsno_path)
 
-        if new_size == original_size and not cfg.BYPASS_FILE_SIZE_CHECK:
+        if new_size == original_size and not cfg.processor.bypass_file_size_check:
             return f"File size unchanged after processing: {dsno_path.name}"
 
         return None
@@ -332,7 +332,7 @@ def process_dsno(
 
         processed_dir.mkdir(parents=True, exist_ok=True)
         target_dsno_path = dsno_path
-        if cfg.KEEP_ORIGINAL:
+        if cfg.processor.keep_original:
             if not dsno_path.exists():
                 error = f"DSNO file not found: {dsno_path.name}"
                 result.errors.append(error)
@@ -360,14 +360,14 @@ def process_dsno(
             result.errors.append(error)
             log.error(error)
             _cb("error", {"name": dsno_path.name, "detail": error})
-            if cfg.KEEP_ORIGINAL and target_dsno_path.exists():
+            if cfg.processor.keep_original and target_dsno_path.exists():
                 try:
                     target_dsno_path.unlink()
                 except Exception:
                     pass
         else:
             result.success += 1
-            if cfg.KEEP_ORIGINAL:
+            if cfg.processor.keep_original:
                 original_files_dir = processed_dir / "original_files"
                 original_files_dir.mkdir(parents=True, exist_ok=True)
                 try:
