@@ -183,7 +183,7 @@ class DSNOApp(
         # Label autor (direita)
         ctk.CTkLabel(
             footer_frame,
-            text="Made by Matheus Borges",
+            text="Made by Matheus Borges - Version: 1.0",
             font=ctk.CTkFont(family=_FONT_FAMILY, size=9),
             text_color="gray60",
         ).pack(side="right")
