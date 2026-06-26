@@ -51,8 +51,9 @@ Pré-requisitos da máquina de build:
   - `ojdbc17.jar` (driver Oracle JDBC)
   - `jdk-21.0.10_windows-x64_bin.zip` (JDK 21 para Windows x64)
 
-  > Esses binários **não são versionados** (`.gitignore`). Baixe-os e coloque-os
-  > em `java/` antes do build.
+  > Esses binários são versionados via **Git LFS**. Tenha o
+  > [git-lfs](https://git-lfs.com) instalado **antes** de clonar (`git lfs install`);
+  > um clone sem LFS traz apenas ponteiros, não os arquivos reais.
 
 Passos:
 

@@ -36,7 +36,3 @@ Output/
 # Frontend (Vite) — generated
 frontend/node_modules/
 frontend/dist/
-
-# Bundled Java for the Pendências module (JDBC driver + JDK 21). Large binaries
-# fetched at build time, not versioned. See docs/DEPLOY.md.
-java/
