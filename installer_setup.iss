@@ -39,10 +39,22 @@ Source: "dist\DSNO Processor\*"; DestDir: "{app}"; Flags: ignoreversion recurses
 Source: "config.toml.example"; DestDir: "{app}"; DestName: "config.toml"; Flags: ignoreversion onlyifdoesntexist
 ; icon
 Source: "assets\icons\favicon.ico"; DestDir: "{app}"; Flags: ignoreversion
+; Driver JDBC do Oracle (módulo de Pendências) — fica em {app}\java\ojdbc17.jar
+Source: "java\ojdbc17.jar"; DestDir: "{app}\java"; Flags: ignoreversion
+; Java 21 embarcado — copiado como zip e extraído pelo [Run] abaixo; o zip é
+; removido ao final da instalação (deleteafterinstall).
+Source: "java\jdk-21.0.10_windows-x64_bin.zip"; DestDir: "{app}\java"; Flags: ignoreversion deleteafterinstall
 
 [Icons]
 Name: "{group}\DSNO Processor"; Filename: "{app}\DSNO Processor.exe"
 Name: "{userdesktop}\DSNO Processor"; Filename: "{app}\DSNO Processor.exe"; Tasks: desktopicon
 
 [Run]
+; Extrai o Java 21 embarcado para {app}\java\jdk-21.0.10 (usado pelo módulo de
+; Pendências). Roda antes do lançamento do app.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -Path '{app}\java\jdk-21.0.10_windows-x64_bin.zip' -DestinationPath '{app}\java' -Force"""; StatusMsg: "Extraindo Java 21..."; Flags: runhidden waituntilterminated
 Description: "{cm:LaunchProgram,DSNO Processor}"; FileName: "{app}\DSNO Processor.exe"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Remove o Java extraído na desinstalação (não foi rastreado pelo instalador).
+Type: filesandordirs; Name: "{app}\java"
