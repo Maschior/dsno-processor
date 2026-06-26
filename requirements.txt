@@ -15,4 +15,5 @@ pyrect
 pytweening
 mouseinfo
 pywebview
-oracledb
+jaydebeapi
+JPype1

@@ -45,7 +45,7 @@ Config lives in `config.toml` (copy from `config.toml.example`). Legacy `config.
 | `config.py` | TOML config loading/saving; `AppConfig` is the typed config dataclass with backward-compat property aliases |
 | `models.py` | `FreightMode`, `DateRange`, `DsnoInfo`, `ProcessingResult` |
 | `database.py` | SQLite layer (`tb_control`, `tb_shipment_info`). Mirrors the spreadsheet data model and can fully replace it. `insert_control_if_absent()` inserts a control row only if its DSNO is new, preserving the existing status |
-| `oracle_source.py` | Step-1 sync: pulls the last `oracle.lookback_months` of pending DSNOs for `oracle.customer_id` from the Oracle EBS DB (`python-oracledb`, thin mode) and inserts the *new* ones into `tb_control`. Existing records are never touched |
+| `oracle_source.py` | Step-1 sync: pulls the last `oracle.lookback_months` of pending DSNOs for `oracle.customer_id` from the Oracle EBS DB (JDBC via `jaydebeapi`/`JPype1`, configured by `oracle.jdbc_jar`) and inserts the *new* ones into `tb_control`. Existing records are never touched |
 | `editor.py` | Mutates DSNO files on disk; `edit_navstar_dsno()` writes booking/container into the file |
 | `control_reader.py` | Reads the Control Sheet Excel file; yields `(invoice, dsno_filename, freight_oracle, freight_softway)` tuples |
 | `customer_reader.py` | Reads the Customer Sheet Excel file; looks up `DsnoInfo` by invoice number |
