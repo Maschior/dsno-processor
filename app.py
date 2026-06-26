@@ -10,12 +10,12 @@ import sys
 
 
 def run() -> None:
-    """Start the desktop application (CustomTkinter by default, --web for pywebview)."""
-    if "--web" in sys.argv:
-        from webui import start_webui
-
-        start_webui()
-    else:
+    """Start the desktop application (pywebview web UI by default, --classic for CustomTkinter)."""
+    if "--classic" in sys.argv or "--gui" in sys.argv:
         from gui import start_gui
 
         start_gui()
+    else:
+        from webui import start_webui
+
+        start_webui()

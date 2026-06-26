@@ -1,23 +1,13 @@
-# DSNO Processor — default configuration.
-# The installer copies this file to "config.toml" on first install (it is NOT
-# overwritten on upgrades). Fill in the blanks on first run via the Settings
-# screen. See docs/DEPLOY.md for the full deployment / configuration guide.
-
 [general]
 language = "en"
 data_source = "database"
 
 [paths]
-# Network paths used by the team. Adjust per deployment if the mapped drive
-# differs. The DSNO .txt working folder and the control spreadsheet.
 dsno_directory = "Z:\\Documentação\\ORACLE\\EDI\\DSNO\\WIP"
 control_sheet = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR\\Control ASN Navistar.xlsx"
 customer_sheet = "."
 customer_sheet_pre_path = "Z:\\Documentação\\ORACLE\\EDI\\ASN NAVSTAR"
-# Folder for the shared internal SQLite DB (dsno_processor.db). Accepts a
-# network/UNC path so a team shares one DB. Empty = next to this config file.
-# Set this to the shared folder during deployment (see docs/DEPLOY.md).
-database_dir = ""
+database_dir = "\\\\cbzlswputil11\\BR.GUA.CBZL\\LocalSharedFolders\\projetos3\\Informatica\\EBU IT - Brazil - Local Support\\SOFTTEK\\Software\\dsno-processor-database"
 
 [processor]
 bypass_file_size_check = false
@@ -41,9 +31,8 @@ freight_softway = "FREIGHT_SOFTWAY"
 description = "Obs"
 
 [ebs]
-# Oracle EBS web URLs for the Selenium download/upload steps. Fill on deploy.
-download_url = ""
-upload_url = ""
+download_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63093&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
+upload_url = "https://cbz1p-ebs.cummins.com/OA_HTML/RF.jsp?function_id=63073&resp_id=52646&resp_appl_id=50001&security_group_id=0&lang_code=US&params=sOpRchaciPh1y.IAeyZw4z660afW5TIyT8G.MeFl0zY"
 download_dir = "Z:\\Documentação\\ORACLE\\EDI\\DSNO\\WIP"
 upload_dir = "Z:\\Documentação\\ORACLE\\EDI\\DSNO\\WIP\\Processed"
 headless = true
@@ -57,20 +46,14 @@ download_indices = [
 upload_index = 92
 
 [credentials]
-# EBS web login (personal Cummins SSO). Each user fills this in on first run.
 email = ""
 password = ""
 
 [oracle]
-# Oracle EBS source database (step 1 — Pendências). Fill user/password/dsn on
-# deploy. customer_id is the Navistar customer in EBS.
-user = ""
-password = ""
-dsn = ""
+user = "interface"
+password = "interface"
+dsn = "cbz1p-scan.cummins.com:1521/CBZ1P"
 customer_id = "3579646"
 lookback_months = 1
-# Java is required only for the Pendências step. The installer bundles and
-# extracts Java 21 and the Oracle JDBC driver into the app folder; these
-# relative paths resolve against the install directory at runtime.
-jdbc_jar = "java\\ojdbc17.jar"
-jvm_path = "java\\jdk-21.0.10"
+jdbc_jar = ""
+jvm_path = ""

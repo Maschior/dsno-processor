@@ -5,18 +5,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Run the app (CustomTkinter GUI by default)
+# Run the app (pywebview web UI by default — loads frontend/dist, build it first)
 py main.py                        # Windows
 python main.py                    # Linux/macOS
 
-# Run the alternative pywebview web UI (React)
-py main.py --web                  # loads frontend/dist (run the build first)
+# Run the alternative CustomTkinter GUI
+py main.py --classic              # (--gui is also accepted)
 
-# Build the web UI (required before `--web` outside dev mode)
+# Build the web UI (required for the default mode outside dev mode)
 cd frontend && npm install && npm run build
 # Web UI dev mode (Vite hot-reload):
 cd frontend && npm run dev        # then, in another shell:
-DSNO_WEB_DEV=1 py main.py --web    # DSNO_WEB_DEBUG=1 also enables WebView2 DevTools
+DSNO_WEB_DEV=1 py main.py          # DSNO_WEB_DEBUG=1 also enables WebView2 DevTools
 
 # Run all tests
 pytest tests/
@@ -35,7 +35,7 @@ Config lives in `config.toml` (copy from `config.toml.example`). Legacy `config.
 
 ## Architecture
 
-**Two-layer layout:** `dsno_processor/` is the domain/backend package; `gui/` (CustomTkinter) and `frontend/` + `webui/` (pywebview + React) are two interchangeable presentation layers over the same domain. `app.py` is the composition root — it wires the GUI by default, or the web UI when launched with `--web`.
+**Two-layer layout:** `dsno_processor/` is the domain/backend package; `gui/` (CustomTkinter) and `frontend/` + `webui/` (pywebview + React) are two interchangeable presentation layers over the same domain. `app.py` is the composition root — it wires the web UI by default, or the CustomTkinter GUI when launched with `--classic`/`--gui`.
 
 ### Domain package (`dsno_processor/`)
 

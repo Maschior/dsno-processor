@@ -35,7 +35,7 @@ Pontos importantes para o deploy:
 |---|---|---|
 | Windows 11 | Tudo | Instalação por usuário, **sem privilégios de admin**. |
 | Google Chrome | Download / Upload (EBS) | Usado pela automação Selenium. |
-| WebView2 / Edge | Interface web (`--web`) | Já presente no Windows 11. Opcional. |
+| WebView2 / Edge | Interface web (padrão) | Já presente no Windows 11. Necessário para a UI padrão. |
 | Drive de rede mapeado (ex.: `Z:`) | Caminhos das planilhas / DSNOs | Ou ajustar os caminhos na configuração. |
 | Acesso à pasta de rede do banco | Banco compartilhado | UNC `\\servidor\...`. |
 | Java | Pendências (Oracle) | **Já vai embarcado** — nada a instalar. |
