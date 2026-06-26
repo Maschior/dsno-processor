@@ -11,9 +11,9 @@ except ImportError:
     __version__ = "1.0"
 
 
-def run_command(command, shell=True):
+def run_command(command, shell=True, cwd=None):
     print(f"Executando: {command}")
-    result = subprocess.run(command, shell=shell)
+    result = subprocess.run(command, shell=shell, cwd=cwd)
     if result.returncode != 0:
         print(f"Erro ao executar: {command}")
         sys.exit(result.returncode)
@@ -25,10 +25,17 @@ def main():
 
     print(f"--- Iniciando Build para versão {__version__} ---")
 
-    # 1. PyInstaller
+    # 1. Frontend (Vite) — gera frontend/dist embarcado no app para o modo --web
+    frontend_dir = root_dir / "frontend"
+    if (frontend_dir / "package.json").exists():
+        if not (frontend_dir / "node_modules").exists():
+            run_command("npm install", cwd=frontend_dir)
+        run_command("npm run build", cwd=frontend_dir)
+
+    # 2. PyInstaller
     run_command("pyinstaller main.spec --clean --noconfirm")
 
-    # 2. Inno Setup (ISCC)
+    # 3. Inno Setup (ISCC)
     # Tenta localizar o ISCC.exe se não estiver no PATH
     iscc_path = r"C:\Users\ao32v\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
 

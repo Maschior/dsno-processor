@@ -33,3 +33,6 @@ Output/
 .coverage
 .pytest_cache/
 .idea/
+# Frontend (Vite) — generated
+frontend/node_modules/
+frontend/dist/

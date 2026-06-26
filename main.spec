@@ -17,6 +17,8 @@ a = Analysis(
         ('assets', 'assets'),
         # Ship default config example so the user can bootstrap
         ('config.toml.example', '.'),
+        # React (Vite) build for the --web pywebview frontend
+        ('frontend/dist', 'frontend/dist'),
     ],
     hiddenimports=[
         # ── Selenium ──────────────────────────────────────
@@ -53,6 +55,11 @@ a = Analysis(
         'tomli_w',
         # ── GUI ──────────────────────────────────────────
         'customtkinter',
+        # ── Web UI (pywebview, --web) ────────────────────
+        'webview',
+        'webview.platforms.edgechromium',
+        'webui',
+        'webui.api',
         # ── Project modules ──────────────────────────────
         'dsno_processor',
         'dsno_processor.config',
