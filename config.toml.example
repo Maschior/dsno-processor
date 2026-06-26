@@ -44,3 +44,12 @@ upload_index = 92
 [credentials]
 email = "user@company.com"
 password = "senha"
+
+# Oracle EBS source database — used by the "Pendências" step (oracle_source.py)
+# to pull the last `lookback_months` of pending DSNOs for `customer_id`.
+[oracle]
+user = "oracle_user"
+password = "oracle_password"
+dsn = "host:1521/service_name"   # or a TNS alias
+customer_id = "3579646"
+lookback_months = 2

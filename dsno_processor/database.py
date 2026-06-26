@@ -190,6 +190,35 @@ def upsert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
     return cursor.lastrowid
 
 
+def insert_control_if_absent(conn: sqlite3.Connection, record: ControlRecord) -> bool:
+    """Insert a control record only if its DSNO_FILENAME is new.
+
+    Existing rows are left untouched — their STATUS (and everything else) is
+    preserved. Returns ``True`` if a row was inserted, ``False`` if skipped.
+    """
+    cursor = conn.execute(
+        """
+        INSERT INTO tb_control
+            (DELIVERY_ID, INVOICE, DSNO_FILENAME, CREATION_DATE,
+             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (DSNO_FILENAME) DO NOTHING
+        """,
+        (
+            record.delivery_id,
+            record.invoice,
+            record.dsno_filename,
+            record.creation_date,
+            record.status,
+            record.freight_oracle,
+            record.freight_softway,
+            record.description,
+        ),
+    )
+    conn.commit()
+    return cursor.rowcount > 0
+
+
 def get_control_pairs(
     conn: sqlite3.Connection,
     start: datetime,

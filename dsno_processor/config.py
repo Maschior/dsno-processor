@@ -14,8 +14,6 @@ from pathlib import Path
 
 import tomli_w
 
-from .exceptions import ConfigurationError
-
 _DEFAULT_CONFIG_TOML = "config.toml"
 _LEGACY_CONFIG_TXT = "config.txt"
 
@@ -108,6 +106,21 @@ class CredentialsConfig:
 
 
 @dataclass
+class OracleConfig:
+    """Oracle source-database connection for fetching pending DSNO records.
+
+    Used by ``oracle_source.sync_oracle_pending`` to pull the last
+    ``lookback_months`` of deliveries for ``customer_id`` into the internal DB.
+    """
+
+    user: str = ""
+    password: str = ""
+    dsn: str = ""  # host:port/service_name or a TNS alias
+    customer_id: str = ""  # WND.CUSTOMER_ID filter
+    lookback_months: int = 2  # always pull the last N months
+
+
+@dataclass
 class ProcessorConfig:
     """Settings that control DSNO processing behaviour."""
 
@@ -143,6 +156,7 @@ class AppConfig:
     )
     ebs: EbsConfig = field(default_factory=EbsConfig)
     credentials: CredentialsConfig = field(default_factory=CredentialsConfig)
+    oracle: OracleConfig = field(default_factory=OracleConfig)
 
 
 # ── Serialization helpers ────────────────────────────────────────────
@@ -201,6 +215,13 @@ def _config_to_dict(config: AppConfig) -> dict:
             "email": config.credentials.email,
             "password": config.credentials.password,
         },
+        "oracle": {
+            "user": config.oracle.user,
+            "password": config.oracle.password,
+            "dsn": config.oracle.dsn,
+            "customer_id": config.oracle.customer_id,
+            "lookback_months": config.oracle.lookback_months,
+        },
     }
 
 
@@ -217,6 +238,7 @@ def _dict_to_config(data: dict) -> AppConfig:
 
     folders_d = ebs_d.get("folders", ebs_d.get("pastas", {}))
     cred_d = data.get("credentials", {})
+    oracle_d = data.get("oracle", {})
 
     return AppConfig(
         general=GeneralConfig(
@@ -267,6 +289,13 @@ def _dict_to_config(data: dict) -> AppConfig:
         credentials=CredentialsConfig(
             email=cred_d.get("email", ""),
             password=cred_d.get("password", ""),
+        ),
+        oracle=OracleConfig(
+            user=oracle_d.get("user", ""),
+            password=oracle_d.get("password", ""),
+            dsn=oracle_d.get("dsn", ""),
+            customer_id=oracle_d.get("customer_id", ""),
+            lookback_months=int(oracle_d.get("lookback_months", 2)),
         ),
     )
 
@@ -376,10 +405,8 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         path: Path to the config file. Defaults to ``config.toml`` in cwd.
 
     Returns:
-        A validated :class:`AppConfig` instance.
-
-    Raises:
-        ConfigurationError: If neither the TOML nor legacy INI file exists.
+        A validated :class:`AppConfig` instance.  If no config file exists,
+        a complete default one is written and returned.
     """
     config_path = Path(path) if path else Path(_DEFAULT_CONFIG_TOML)
 
@@ -389,7 +416,11 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         if legacy.exists():
             return _migrate_ini_to_toml(legacy, config_path)
 
-        raise ConfigurationError(f"Configuration file not found: {config_path}")
+        # No config and no legacy file: write a complete default config so the
+        # user has every option present (blank) to fill in.
+        config = AppConfig()
+        save_config(config, config_path)
+        return config
 
     # ── Read TOML ────────────────────────────────────────────────
     with open(config_path, "rb") as fh:
