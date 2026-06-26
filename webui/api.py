@@ -129,6 +129,63 @@ class Api:
             conn.close()
         return {"imported": imported, "updated": updated, "skipped": skipped}
 
+    def get_control_statuses(self, date_start: str = "", date_end: str = "") -> list:
+        """Return distinct STATUS values from tb_control, optionally filtered by date range.
+
+        date_start / date_end may be in HTML datetime-local format (YYYY-MM-DDTHH:MM).
+        Falls back to all statuses when the DB is empty or unavailable.
+        """
+        from dsno_processor.database import get_connection, get_db_path, init_db
+
+        try:
+            conn = get_connection(get_db_path())
+            init_db(conn)
+            try:
+                s = date_start.replace("T", " ") if date_start else ""
+                e = date_end.replace("T", " ") if date_end else ""
+                if s and e:
+                    rows = conn.execute(
+                        "SELECT DISTINCT STATUS FROM tb_control"
+                        " WHERE CREATION_DATE BETWEEN ? AND ? AND STATUS IS NOT NULL ORDER BY STATUS",
+                        (s, e),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT DISTINCT STATUS FROM tb_control WHERE STATUS IS NOT NULL ORDER BY STATUS"
+                    ).fetchall()
+                return [r[0] for r in rows]
+            finally:
+                conn.close()
+        except Exception:
+            return []
+
+    def get_records(self, kind: str = "control") -> dict:
+        """Return ``{columns, rows}`` from the internal DB for the records viewer.
+
+        ``kind`` is ``"control"`` (tb_control) or ``"shipment"`` (tb_shipment_info).
+        Best-effort: returns empty columns/rows if the DB is missing or unreadable.
+        """
+        from dsno_processor.database import (
+            get_connection,
+            get_db_path,
+            init_db,
+            list_control,
+            list_shipments,
+        )
+
+        try:
+            conn = get_connection(get_db_path())
+            init_db(conn)
+            try:
+                columns, rows = (
+                    list_shipments(conn) if kind == "shipment" else list_control(conn)
+                )
+            finally:
+                conn.close()
+            return {"columns": columns, "rows": rows}
+        except Exception:  # noqa: BLE001 — viewer should never crash the UI
+            return {"columns": [], "rows": []}
+
     def sync_oracle_pending(self) -> dict:
         """Step 1: pull the last N months of pending DSNOs from Oracle into the DB.
 
@@ -142,10 +199,10 @@ class Api:
         conn = get_connection(get_db_path())
         init_db(conn)
         try:
-            imported, skipped = sync_oracle_pending(conn, cfg.oracle)
+            imported, skipped, columns, rows = sync_oracle_pending(conn, cfg.oracle)
         finally:
             conn.close()
-        return {"imported": imported, "skipped": skipped}
+        return {"imported": imported, "skipped": skipped, "columns": columns, "rows": rows}
 
     def sync_status(self, control_path: str, dsno_dir: str) -> dict:
         """Sync control-sheet + DB statuses. Mirrors _sync_status_thread."""
@@ -203,6 +260,19 @@ class Api:
     def save_config(self, data: dict) -> None:
         """Persist a config dict (same shape as :meth:`get_config`)."""
         save_config(_dict_to_config(data))
+
+    def export_config(self) -> str:
+        """Write the current config to a user-chosen file. Returns the path or ''."""
+        dest = self._window.create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename="config.toml",
+            file_types=("TOML (*.toml)", "All files (*.*)"),
+        )
+        if not dest:
+            return ""
+        path = dest if isinstance(dest, str) else dest[0]
+        save_config(load_config(), path)  # normalises + exports the effective config
+        return path
 
     # ── Native file dialogs ──────────────────────────────────────────
     def browse_file(self, excel: bool = True) -> str:

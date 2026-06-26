@@ -18,6 +18,7 @@ from dsno_processor.i18n import set_language, t
 from gui.presenters.app_presenter import AppPresenterMixin
 from gui.frames.download_tab import DownloadTabMixin
 from gui.frames.processor_tab import ProcessorTabMixin
+from gui.frames.records_tab import RecordsTabMixin
 from gui.frames.upload_tab import UploadTabMixin
 from gui.themes.appearance import FONT_FAMILY as _FONT_FAMILY
 from gui.widgets.dashboard import (
@@ -30,7 +31,12 @@ log = logging.getLogger(__name__)
 
 
 class DSNOApp(
-    AppPresenterMixin, UploadTabMixin, DownloadTabMixin, ProcessorTabMixin, ctk.CTk
+    AppPresenterMixin,
+    UploadTabMixin,
+    DownloadTabMixin,
+    ProcessorTabMixin,
+    RecordsTabMixin,
+    ctk.CTk,
 ):
     """Main application window."""
 
@@ -53,6 +59,7 @@ class DSNOApp(
         self._TAB_PROC = t("tab.processor")
         self._TAB_DOWNLOAD = t("tab.download")
         self._TAB_UPLOAD = t("tab.upload")
+        self._TAB_RECORDS = t("tab.records")
 
         self.title(t("app.title"))
 
@@ -297,10 +304,12 @@ class DSNOApp(
         self._tabview.add(self._TAB_PROC)
         self._tabview.add(self._TAB_DOWNLOAD)
         self._tabview.add(self._TAB_UPLOAD)
+        self._tabview.add(self._TAB_RECORDS)
 
         self._build_tab_processor(default_customer, default_control, default_dsno_dir)
         self._build_tab_download()
         self._build_tab_upload()
+        self._build_tab_records()
 
 
 def start_gui() -> None:

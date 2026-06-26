@@ -11,6 +11,7 @@ The database file lives alongside ``config.toml`` in the project root.
 
 from __future__ import annotations
 
+import getpass
 import logging
 import sqlite3
 from dataclasses import dataclass
@@ -20,6 +21,12 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 _DEFAULT_DB_NAME = "dsno_processor.db"
+
+# Windows username of whoever is running this process; stamped on new records.
+try:
+    _CURRENT_USER = getpass.getuser()
+except Exception:  # noqa: BLE001 — getuser can raise if no env var is set
+    _CURRENT_USER = ""
 
 # Register explicit adapters for Python 3.12+ (default ones are deprecated).
 sqlite3.register_adapter(datetime, lambda dt: dt.isoformat())
@@ -43,6 +50,7 @@ class ControlRecord:
     freight_oracle: str | None = None
     freight_softway: str | None = None
     description: str | None = None
+    author: str = ""
 
 
 @dataclass
@@ -56,6 +64,7 @@ class ShipmentRecord:
     invoice: int = 0
     booking: str = ""
     container: str = ""
+    author: str = ""
 
 
 # ── Schema ───────────────────────────────────────────────────────────
@@ -71,7 +80,8 @@ CREATE TABLE IF NOT EXISTS tb_control (
     STATUS          VARCHAR,
     FREIGHT_ORACLE  VARCHAR,
     FREIGHT_SOFTWAY VARCHAR,
-    DESCRIPTION     VARCHAR
+    DESCRIPTION     VARCHAR,
+    AUTHOR          VARCHAR
 );
 
 CREATE INDEX IF NOT EXISTS idx_control_delivery_id
@@ -88,7 +98,8 @@ CREATE TABLE IF NOT EXISTS tb_shipment_info (
     ESN             BIGINT UNIQUE,
     INVOICE         INTEGER NOT NULL,
     BOOKING         VARCHAR NOT NULL,
-    CONTAINER       VARCHAR NOT NULL
+    CONTAINER       VARCHAR NOT NULL,
+    AUTHOR          VARCHAR
 );
 
 CREATE INDEX IF NOT EXISTS idx_shipment_invoice
@@ -102,9 +113,23 @@ CREATE INDEX IF NOT EXISTS idx_shipment_delivery_id
 
 
 def get_db_path(config_dir: Path | str | None = None) -> Path:
-    """Return the default database path (same directory as config.toml)."""
+    """Return the database path.
+
+    Resolution order:
+    1. an explicit ``config_dir`` argument (folder holding the db file),
+    2. ``config.paths.database_dir`` if set (supports UNC/network folders),
+    3. the default: the db file in the current directory (next to config.toml).
+    """
     if config_dir:
         return Path(config_dir) / _DEFAULT_DB_NAME
+    try:  # ponytail: cheap reload, get_db_path is called a handful of times per op
+        from .config import load_config
+
+        configured = str(load_config().paths.database_dir)
+    except Exception:  # noqa: BLE001 — never let config errors break DB access
+        configured = ""
+    if configured:
+        return Path(configured) / _DEFAULT_DB_NAME
     return Path(_DEFAULT_DB_NAME)
 
 
@@ -122,11 +147,16 @@ def init_db(conn: sqlite3.Connection) -> None:
     """Create tables if they do not already exist."""
     conn.executescript(_SCHEMA_SQL)
 
-    # Simple migration: add DESCRIPTION column if it doesn't exist
-    try:
-        conn.execute("ALTER TABLE tb_control ADD COLUMN DESCRIPTION VARCHAR")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    # Simple migrations: add columns that older DBs may lack.
+    for table, column in (
+        ("tb_control", "DESCRIPTION"),
+        ("tb_control", "AUTHOR"),
+        ("tb_shipment_info", "AUTHOR"),
+    ):
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} VARCHAR")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     log.info("Database schema initialized.")
 
@@ -140,8 +170,8 @@ def insert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
         """
         INSERT INTO tb_control
             (DELIVERY_ID, INVOICE, DSNO_FILENAME, CREATION_DATE,
-             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION, AUTHOR)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record.delivery_id,
@@ -152,6 +182,7 @@ def insert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
             record.freight_oracle,
             record.freight_softway,
             record.description,
+            record.author or _CURRENT_USER,
         ),
     )
     conn.commit()
@@ -164,8 +195,8 @@ def upsert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
         """
         INSERT INTO tb_control
             (DELIVERY_ID, INVOICE, DSNO_FILENAME, CREATION_DATE,
-             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION, AUTHOR)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (DSNO_FILENAME) DO UPDATE SET
             DELIVERY_ID     = COALESCE(excluded.DELIVERY_ID, tb_control.DELIVERY_ID),
             INVOICE         = excluded.INVOICE,
@@ -174,6 +205,7 @@ def upsert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
             FREIGHT_ORACLE  = COALESCE(excluded.FREIGHT_ORACLE, tb_control.FREIGHT_ORACLE),
             FREIGHT_SOFTWAY = COALESCE(excluded.FREIGHT_SOFTWAY, tb_control.FREIGHT_SOFTWAY),
             DESCRIPTION     = COALESCE(excluded.DESCRIPTION, tb_control.DESCRIPTION)
+            -- AUTHOR is the original creator; never overwritten on update.
         """,
         (
             record.delivery_id,
@@ -184,24 +216,26 @@ def upsert_control_record(conn: sqlite3.Connection, record: ControlRecord) -> in
             record.freight_oracle,
             record.freight_softway,
             record.description,
+            record.author or _CURRENT_USER,
         ),
     )
     conn.commit()
     return cursor.lastrowid
 
 
-def insert_control_if_absent(conn: sqlite3.Connection, record: ControlRecord) -> bool:
+def insert_control_if_absent(conn: sqlite3.Connection, record: ControlRecord, commit: bool = True) -> bool:
     """Insert a control record only if its DSNO_FILENAME is new.
 
     Existing rows are left untouched — their STATUS (and everything else) is
     preserved. Returns ``True`` if a row was inserted, ``False`` if skipped.
+    Pass ``commit=False`` to batch multiple inserts in one transaction.
     """
     cursor = conn.execute(
         """
         INSERT INTO tb_control
             (DELIVERY_ID, INVOICE, DSNO_FILENAME, CREATION_DATE,
-             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             STATUS, FREIGHT_ORACLE, FREIGHT_SOFTWAY, DESCRIPTION, AUTHOR)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (DSNO_FILENAME) DO NOTHING
         """,
         (
@@ -213,9 +247,11 @@ def insert_control_if_absent(conn: sqlite3.Connection, record: ControlRecord) ->
             record.freight_oracle,
             record.freight_softway,
             record.description,
+            record.author or _CURRENT_USER,
         ),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return cursor.rowcount > 0
 
 
@@ -349,8 +385,8 @@ def insert_shipment(conn: sqlite3.Connection, record: ShipmentRecord) -> int:
     cursor = conn.execute(
         """
         INSERT INTO tb_shipment_info
-            (DELIVERY_ID, ESN, INVOICE, BOOKING, CONTAINER)
-        VALUES (?, ?, ?, ?, ?)
+            (DELIVERY_ID, ESN, INVOICE, BOOKING, CONTAINER, AUTHOR)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             record.delivery_id,
@@ -358,6 +394,7 @@ def insert_shipment(conn: sqlite3.Connection, record: ShipmentRecord) -> int:
             record.invoice,
             record.booking,
             record.container,
+            record.author or _CURRENT_USER,
         ),
     )
     conn.commit()
@@ -374,13 +411,14 @@ def upsert_shipment(conn: sqlite3.Connection, record: ShipmentRecord) -> int:
     cursor = conn.execute(
         """
         INSERT INTO tb_shipment_info
-            (DELIVERY_ID, ESN, INVOICE, BOOKING, CONTAINER)
-        VALUES (?, ?, ?, ?, ?)
+            (DELIVERY_ID, ESN, INVOICE, BOOKING, CONTAINER, AUTHOR)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT (ESN) DO UPDATE SET
             DELIVERY_ID = COALESCE(excluded.DELIVERY_ID, tb_shipment_info.DELIVERY_ID),
             INVOICE     = excluded.INVOICE,
             BOOKING     = excluded.BOOKING,
             CONTAINER   = excluded.CONTAINER
+            -- AUTHOR is the original creator; never overwritten on update.
         """,
         (
             record.delivery_id,
@@ -388,6 +426,7 @@ def upsert_shipment(conn: sqlite3.Connection, record: ShipmentRecord) -> int:
             record.invoice,
             record.booking,
             record.container,
+            record.author or _CURRENT_USER,
         ),
     )
     conn.commit()
@@ -419,6 +458,27 @@ def get_shipment_info(
         booking=row["BOOKING"],
         container=row["CONTAINER"],
     )
+
+
+# ── Read-only listing (for the records viewer UI) ────────────────────
+
+
+def _list_rows(conn: sqlite3.Connection, table: str, limit: int) -> tuple[list[str], list[list[str]]]:
+    """Return ``(columns, rows)`` for *table*, newest first. Cells stringified, ``None``→\"\"."""
+    cursor = conn.execute(f"SELECT * FROM {table} ORDER BY ID DESC LIMIT ?", (limit,))
+    columns = [d[0] for d in cursor.description]
+    rows = [["" if v is None else str(v) for v in row] for row in cursor.fetchall()]
+    return columns, rows
+
+
+def list_control(conn: sqlite3.Connection, limit: int = 1000) -> tuple[list[str], list[list[str]]]:
+    """Return ``(columns, rows)`` from ``tb_control``, newest first."""
+    return _list_rows(conn, "tb_control", limit)
+
+
+def list_shipments(conn: sqlite3.Connection, limit: int = 1000) -> tuple[list[str], list[list[str]]]:
+    """Return ``(columns, rows)`` from ``tb_shipment_info``, newest first."""
+    return _list_rows(conn, "tb_shipment_info", limit)
 
 
 # ── Import from spreadsheets ────────────────────────────────────────

@@ -58,6 +58,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "tab.processor": "Processor",
         "tab.download": "EBS Download",
         "tab.upload": "EBS Upload",
+        "tab.records": "Records",
         # ── Sub-tabs ────────────────────────────────────────────
         "tab.configuration": "Configuration",
         "tab.progress": "Progress",
@@ -159,6 +160,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.paths.customer_sheet_hint": "Customer spreadsheet (optional).",
         "settings.paths.customer_pre_path": "Customer Pre-Path:",
         "settings.paths.customer_pre_path_hint": "Default folder for browsing customer sheets.",
+        "settings.paths.database_dir": "Database Folder:",
+        "settings.paths.database_dir_hint": "Folder for the internal SQLite database (dsno_processor.db). Accepts a network/UNC path. Empty = next to config.toml.",
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Settings that control the processing behaviour.",
         "settings.processor.bypass_file_size_check": "Bypass file size verification:",
@@ -249,6 +252,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "sync_status.success": "Sync complete: {processed} marked as Processed, {downloaded} marked as Downloaded.",
         "sync_status.no_updates": "No status updates needed.",
         "sync_status.error": "Sync failed: {error}",
+
+        # ── Records viewer ────────────────────────────────────────────
+        "records.control": "Control",
+        "records.shipment": "Customer",
+        "records.refresh": "Refresh",
+        "records.count": "{count} record(s)",
     },
     # ══════════════════════════════════════════════════════════════
     # PORTUGUESE
@@ -266,6 +275,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "tab.processor": "Processador",
         "tab.download": "EBS Download",
         "tab.upload": "EBS Upload",
+        "tab.records": "Registros",
         # ── Sub-tabs ────────────────────────────────────────────
         "tab.configuration": "Configuração",
         "tab.progress": "Progresso",
@@ -367,6 +377,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.paths.customer_sheet_hint": "Planilha do cliente (opcional).",
         "settings.paths.customer_pre_path": "Pré-Caminho Cliente:",
         "settings.paths.customer_pre_path_hint": "Pasta padrão para navegação de planilhas.",
+        "settings.paths.database_dir": "Pasta do Banco:",
+        "settings.paths.database_dir_hint": "Pasta do banco SQLite interno (dsno_processor.db). Aceita caminho de rede (UNC). Vazio = junto ao config.toml.",
         # ── Settings: Processor ─────────────────────────────────
         "settings.processor.hint": "Configurações que controlam o comportamento do processamento.",
         "settings.processor.bypass_file_size_check": "Ignorar verificação de tamanho do arquivo:",
@@ -457,6 +469,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "sync_status.success": "Sincronização concluída: {processed} marcado(s) como Processed, {downloaded} marcado(s) como Downloaded.",
         "sync_status.no_updates": "Nenhuma atualização de status necessária.",
         "sync_status.error": "Falha na sincronização: {error}",
+
+        # ── Records viewer ────────────────────────────────────────────
+        "records.control": "Controle",
+        "records.shipment": "Cliente",
+        "records.refresh": "Atualizar",
+        "records.count": "{count} registro(s)",
     },
 }
 

@@ -37,6 +37,7 @@ class PathsConfig:
     control_sheet: Path = field(default_factory=Path)
     customer_sheet: Path = field(default_factory=Path)
     customer_sheet_pre_path: Path = field(default_factory=Path)
+    database_dir: Path = field(default_factory=Path)  # empty = next to config.toml; supports UNC/network folders
 
     def validate(self) -> list[str]:
         """Return a list of warnings for paths that do not exist."""
@@ -118,6 +119,8 @@ class OracleConfig:
     dsn: str = ""  # host:port/service_name or a TNS alias
     customer_id: str = ""  # WND.CUSTOMER_ID filter
     lookback_months: int = 2  # always pull the last N months
+    jdbc_jar: str = ""  # path to ojdbc*.jar — connection goes through JDBC (jaydebeapi)
+    jvm_path: str = ""  # JDK home, bin dir, or jvm.dll path; empty = JPype auto-detect
 
 
 @dataclass
@@ -174,6 +177,7 @@ def _config_to_dict(config: AppConfig) -> dict:
             "control_sheet": str(config.paths.control_sheet),
             "customer_sheet": str(config.paths.customer_sheet),
             "customer_sheet_pre_path": str(config.paths.customer_sheet_pre_path),
+            "database_dir": str(config.paths.database_dir),
         },
         "processor": {
             "bypass_file_size_check": bool(config.processor.bypass_file_size_check),
@@ -221,6 +225,8 @@ def _config_to_dict(config: AppConfig) -> dict:
             "dsn": config.oracle.dsn,
             "customer_id": config.oracle.customer_id,
             "lookback_months": config.oracle.lookback_months,
+            "jdbc_jar": config.oracle.jdbc_jar,
+            "jvm_path": config.oracle.jvm_path,
         },
     }
 
@@ -250,6 +256,7 @@ def _dict_to_config(data: dict) -> AppConfig:
             control_sheet=Path(paths_d.get("control_sheet", "")),
             customer_sheet=Path(paths_d.get("customer_sheet", "")),
             customer_sheet_pre_path=Path(paths_d.get("customer_sheet_pre_path", "")),
+            database_dir=Path(paths_d.get("database_dir", "")),
         ),
         processor=ProcessorConfig(
             bypass_file_size_check=bool(proc_d.get("bypass_file_size_check", False)),
@@ -296,6 +303,8 @@ def _dict_to_config(data: dict) -> AppConfig:
             dsn=oracle_d.get("dsn", ""),
             customer_id=oracle_d.get("customer_id", ""),
             lookback_months=int(oracle_d.get("lookback_months", 2)),
+            jdbc_jar=oracle_d.get("jdbc_jar", ""),
+            jvm_path=oracle_d.get("jvm_path", ""),
         ),
     )
 
@@ -336,6 +345,7 @@ def _migrate_ini_to_toml(
             control_sheet=Path(paths_sec.get("CONTROL_SHEET", "")),
             customer_sheet=Path(paths_sec.get("CUSTOMER_SHEET", "")),
             customer_sheet_pre_path=Path(paths_sec.get("CUSTOMER_SHEET_PRE_PATH", "")),
+            database_dir=Path(paths_sec.get("DATABASE_DIR", "")),
         ),
         processor=ProcessorConfig(
             bypass_file_size_check=False,

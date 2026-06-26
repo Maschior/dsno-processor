@@ -492,3 +492,55 @@ class TestImportControlSheet:
 
         with pytest.raises(ValueError, match="Missing required columns"):
             import_control_sheet(db, xlsx)
+
+
+# ── Author stamping + migration ──────────────────────────────────────
+
+
+class TestAuthor:
+    def test_control_insert_stamps_author(self, db):
+        import dsno_processor.database as dbmod
+
+        insert_control_record(
+            db,
+            ControlRecord(invoice=7001, dsno_filename="A.txt", creation_date=datetime(2026, 1, 1)),
+        )
+        row = db.execute("SELECT AUTHOR FROM tb_control WHERE INVOICE = 7001").fetchone()
+        assert row["AUTHOR"] == dbmod._CURRENT_USER
+
+    def test_shipment_insert_stamps_author(self, db):
+        import dsno_processor.database as dbmod
+
+        insert_shipment(db, ShipmentRecord(invoice=7002, booking="BK", container="CN"))
+        row = db.execute("SELECT AUTHOR FROM tb_shipment_info WHERE INVOICE = 7002").fetchone()
+        assert row["AUTHOR"] == dbmod._CURRENT_USER
+
+    def test_explicit_author_preserved(self, db):
+        insert_control_record(
+            db,
+            ControlRecord(
+                invoice=7003, dsno_filename="B.txt", creation_date=datetime(2026, 1, 1), author="alice"
+            ),
+        )
+        row = db.execute("SELECT AUTHOR FROM tb_control WHERE INVOICE = 7003").fetchone()
+        assert row["AUTHOR"] == "alice"
+
+    def test_init_db_migrates_legacy_db_without_author(self):
+        """An old DB lacking AUTHOR gains the column on init_db without error."""
+        conn = sqlite3.connect(":memory:", detect_types=sqlite3.PARSE_DECLTYPES)
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE tb_control (ID INTEGER PRIMARY KEY, DELIVERY_ID BIGINT,"
+            " INVOICE INTEGER, DSNO_FILENAME VARCHAR UNIQUE, CREATION_DATE TIMESTAMP,"
+            " STATUS VARCHAR, FREIGHT_ORACLE VARCHAR, FREIGHT_SOFTWAY VARCHAR)"
+        )
+        conn.execute(
+            "CREATE TABLE tb_shipment_info (ID INTEGER PRIMARY KEY, DELIVERY_ID BIGINT,"
+            " ESN BIGINT UNIQUE, INVOICE INTEGER, BOOKING VARCHAR, CONTAINER VARCHAR)"
+        )
+        init_db(conn)  # must not raise and must add AUTHOR
+        cols_c = {r[1] for r in conn.execute("PRAGMA table_info(tb_control)")}
+        cols_s = {r[1] for r in conn.execute("PRAGMA table_info(tb_shipment_info)")}
+        assert "AUTHOR" in cols_c
+        assert "AUTHOR" in cols_s
+        conn.close()

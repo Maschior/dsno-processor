@@ -261,6 +261,15 @@ class SettingsWindow(ctk.CTkToplevel):
             mode="dir",
             hint=t("settings.paths.customer_pre_path_hint"),
         )
+        self._add_path_field(
+            form,
+            9,
+            t("settings.paths.database_dir"),
+            "database_dir",
+            str(cfg.paths.database_dir) if cfg else "",
+            mode="dir",
+            hint=t("settings.paths.database_dir_hint"),
+        )
 
     def _build_tab_processor(self, cfg) -> None:
         tab = self._tabview.tab(t("settings.tab.processor"))
@@ -816,6 +825,7 @@ class SettingsWindow(ctk.CTkToplevel):
                 customer_sheet_pre_path=_Path(
                     self._vars["customer_sheet_pre_path"].get()
                 ),
+                database_dir=_Path(self._vars["database_dir"].get()),
             ),
             processor=ProcessorConfig(
                 bypass_file_size_check=bool(
